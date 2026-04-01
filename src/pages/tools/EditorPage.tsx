@@ -162,14 +162,17 @@ const EditorPage = () => {
 
 
 
-  // 处理GitHub OAuth回调
+  // 自动登录和处理GitHub OAuth回调
   useEffect(() => {
+    // 检查URL中的code参数（OAuth回调）
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
-    if (code) {
-      // 实际应用中，这里应该发送code到后端换取access_token
-      // 由于纯前端实现限制，这里使用Personal Access Token方式
-      const token = localStorage.getItem('github_token');
+    
+    // 检查localStorage中是否有保存的token
+    const savedToken = localStorage.getItem('github_token');
+    
+    if (code || savedToken) {
+      const token = savedToken || '';
       if (token) {
         setGithubToken(token);
         fetchGitHubUser(token);
@@ -455,6 +458,20 @@ const EditorPage = () => {
     }
   };
 
+  // 退出登录
+  const handleLogout = () => {
+    localStorage.removeItem('github_token');
+    setGithubToken('');
+    setGithubUser(null);
+    setRepos([]);
+    setSelectedRepo('');
+    setCurrentPath('');
+    setFiles([]);
+    setRecentFiles([]);
+    setFileHistory([]);
+    showStatus('已退出GitHub登录', 'info');
+  };
+
 
 
 
@@ -655,6 +672,9 @@ const EditorPage = () => {
                     setModalView('repoList');
                   }}>
                     📚 仓库
+                  </button>
+                  <button className="btn btn-github" onClick={handleLogout}>
+                    🚪 退出
                   </button>
                 </div>
               ) : (
