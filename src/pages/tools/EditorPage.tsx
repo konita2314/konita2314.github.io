@@ -80,6 +80,10 @@ const EditorPage = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isOpeningFile = useRef(false);
 
+  useEffect(() => {
+    document.title = '编辑器 | Konita';
+  }, []);
+
 
 
   // 视图状态 - 对于非md文件，强制使用编辑模式

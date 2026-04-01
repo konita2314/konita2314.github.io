@@ -15,6 +15,10 @@ const BlogPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    document.title = '博客 | Konita';
+  }, []);
+
+  useEffect(() => {
     const loadBlogPosts = async () => {
       try {
         // 使用 Vite 的 glob 功能动态导入博客文件

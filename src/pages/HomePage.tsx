@@ -1,7 +1,11 @@
-import { motion } from 'framer-motion';
+import { motion, useEffect } from 'framer-motion';
 import { Link } from 'react-router-dom';
 
 const HomePage = () => {
+  useEffect(() => {
+    document.title = 'Konita | 个人主页';
+  }, []);
+
   return (
     <section id="home" className="hero">
       <div className="container">

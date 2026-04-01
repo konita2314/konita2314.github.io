@@ -13,6 +13,11 @@ const MaimaiPage = () => {
 
   // 组件加载时检查本地存储
   useEffect(() => {
+    document.title = '舞萌查分器 | Konita';
+  }, []);
+
+  // 组件加载时检查本地存储
+  useEffect(() => {
     const savedUser = localStorage.getItem('maimaiUser');
     if (savedUser) {
       try {

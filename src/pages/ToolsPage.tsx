@@ -1,7 +1,11 @@
-import { motion } from 'framer-motion';
+import { motion, useEffect } from 'framer-motion';
 import { Link } from 'react-router-dom';
 
 const ToolsPage = () => {
+  useEffect(() => {
+    document.title = '工具 | Konita';
+  }, []);
+
   return (
     <section className="tools-page">
       <div className="container">

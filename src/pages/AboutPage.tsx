@@ -5,6 +5,10 @@ const AboutPage = ({ isDarkMode }: { isDarkMode: boolean }) => {
   const [githubAvatar, setGithubAvatar] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+  useEffect(() => {
+    document.title = '关于我 | Konita';
+  }, []);
+
   // 获取GitHub用户头像
   useEffect(() => {
     const fetchGithubAvatar = async () => {

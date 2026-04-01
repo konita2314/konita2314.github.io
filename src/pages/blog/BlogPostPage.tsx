@@ -39,6 +39,18 @@ const BlogPostPage = () => {
   const [toc, setToc] = useState<{id: string, title: string, level: number}[]>([]);
 
   useEffect(() => {
+    // 设置默认标题
+    document.title = '博客文章 | Konita';
+  }, []);
+
+  // 当文章加载完成后，更新标题
+  useEffect(() => {
+    if (post) {
+      document.title = `${post.title} | Konita`;
+    }
+  }, [post]);
+
+  useEffect(() => {
     const loadBlogPost = async () => {
       try {
         // 使用Vite的glob功能加载所有博客文件

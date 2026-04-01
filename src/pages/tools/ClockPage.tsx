@@ -5,6 +5,10 @@ const ClockPage = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  useEffect(() => {
+    document.title = '桌面时钟 | Konita';
+  }, []);
+
   // 更新时间
   useEffect(() => {
     const timer = setInterval(() => {
