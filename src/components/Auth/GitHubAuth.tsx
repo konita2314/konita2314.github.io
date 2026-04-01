@@ -46,7 +46,7 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onLogin, onError }) => {
   }, [onLogin, onError]);
 
   // 模拟GitHub登录过程
-  const simulateGitHubLogin = async (code: string) => {
+  const simulateGitHubLogin = async (_code: string) => {
     // 实际项目中，这里应该调用后端API获取token
     // 然后使用token获取用户信息
     

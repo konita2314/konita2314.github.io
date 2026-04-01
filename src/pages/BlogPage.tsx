@@ -24,12 +24,13 @@ const BlogPage = () => {
         const posts: BlogPost[] = [];
         
         for (const [path, loader] of Object.entries(blogFiles)) {
-          const id = parseInt(path.split('/').at(-2) || '0');
+          const parts = path.split('/');
+          const id = parseInt(parts[parts.length - 2] || '0');
           const contentPath = path.replace('info.txt', 'info.md');
           
-          const infoContent = await loader();
+          const infoContent = await (loader as () => Promise<string>)();
           const contentLoader = contentFiles[contentPath];
-          const content = contentLoader ? await contentLoader() : '';
+          const content = contentLoader ? await (contentLoader as () => Promise<string>)() : '';
           
           const [title, cover, excerpt] = infoContent.split('\n');
           

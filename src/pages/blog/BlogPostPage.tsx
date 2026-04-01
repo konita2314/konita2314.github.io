@@ -53,9 +53,9 @@ const BlogPostPage = () => {
         
         // 检查文件是否存在
         if (blogFiles[contentPath] && infoFiles[infoPath] && commentFiles[commentsPath]) {
-          const content = await blogFiles[contentPath]();
-        const infoContent = await infoFiles[infoPath]();
-        const commentsData = JSON.parse(await commentFiles[commentsPath]());
+          const content = await (blogFiles[contentPath] as () => Promise<string>)();
+        const infoContent = await (infoFiles[infoPath] as () => Promise<string>)();
+        const commentsData = JSON.parse(await (commentFiles[commentsPath] as () => Promise<string>)());
         
         const lines = infoContent.split('\n');
         const title = lines[0]?.trim() || '';
