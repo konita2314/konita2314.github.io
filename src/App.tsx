@@ -544,7 +544,7 @@ function App() {
               <Route path="/tools/maimai" element={<MaimaiPage />} />
               <Route path="/blog" element={<BlogPage />} />
               <Route path="/blog/:id" element={<BlogPostPage />} />
-              <Route path="/about" element={<AboutPage />} />
+              <Route path="/about" element={<AboutPage isDarkMode={isDarkMode} />} />
               <Route path="*" element={<HomePage />} />
             </Routes>
           </Suspense>
