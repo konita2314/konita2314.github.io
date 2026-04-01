@@ -1,7 +1,7 @@
 // GitHub OAuth配置
 export const GITHUB_CONFIG = {
-  clientId: 'YOUR_GITHUB_CLIENT_ID',
-  clientSecret: 'YOUR_GITHUB_CLIENT_SECRET',
+  clientId: 'Iv23liOPbpgDL5IKqgiw',
+  clientSecret: '325a0b9990528eb38960b1716a62509a0a9cc18d',
   redirectUri: 'http://localhost:5177/auth/github/callback',
   scope: 'user:email'
 };
