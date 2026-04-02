@@ -3,7 +3,17 @@ import react from '@vitejs/plugin-react'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'clean-html',
+      transformIndexHtml(html) {
+        let cleaned = html.replace(/ crossorigin/g, '')
+        cleaned = cleaned.replace(/\s*<link rel="modulepreload" href="data:application\/javascript;base64,[^"]*">\s*/g, '')
+        return cleaned
+      }
+    }
+  ],
   base: '/',
   build: {
     minify: 'terser',
