@@ -6,37 +6,24 @@ export default defineConfig({
   plugins: [
     react(),
     {
-      name: 'clean-html',
+      name: 'remove-modulepreload',
       transformIndexHtml(html) {
-        let cleaned = html.replace(/ crossorigin/g, '')
-        cleaned = cleaned.replace(/\s*<link rel="modulepreload" href="data:application\/javascript;base64,[^"]*">\s*/g, '')
+        let cleaned = html.replace(/\s*<link rel="modulepreload"[^>]*>\s*/g, '')
+        cleaned = cleaned.replace(/\s+crossorigin="[^"]*"/g, '')
+        cleaned = cleaned.replace(/\s+crossorigin/g, '')
         return cleaned
       }
     }
   ],
   base: '/',
   build: {
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
-    cssCodeSplit: true,
+    minify: 'esbuild',
+    cssCodeSplit: false,
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          motion: ['framer-motion'],
-          markdown: ['react-markdown', 'rehype-highlight', 'highlight.js'],
-        },
+        manualChunks: undefined,
       },
     },
-  },
-  optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', 'framer-motion', 'react-markdown', 'rehype-highlight', 'highlight.js'],
   },
 })
