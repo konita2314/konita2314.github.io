@@ -2,17 +2,31 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <script>
+      // 在任何样式/脚本前同步应用主题，防止 FOUC。
+      // 注意：与 src/stores/settings.ts 的初始化逻辑保持一致（同一 key、同一值格式）。
+      try {
+        var root = document.documentElement
+        var dm = localStorage.getItem('darkMode')
+        var dark = dm === null
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches
+          : dm === 'true'
+        if (dark) root.classList.add('dark-mode')
+        if (localStorage.getItem('performanceOptimization') === 'disabled') {
+          root.classList.add('low-performance')
+        }
+      } catch (e) {}
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Konita - 个人主页</title>
-    <!-- 性能优化 -->
-    <link rel="preload" href="/src/main.tsx" as="script" />
-    <link rel="preload" href="/src/App.tsx" as="script" />
-    <meta name="description" content="Konita个人主页 - 包含工具、博客和关于我" />
+    <title>Konita的个人主页</title>
+    <meta name="description" content="Konita的个人主页" />
     <meta name="robots" content="index, follow" />
+    <script type="module" crossorigin src="/assets/index-Tn4dnXX1.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/runtime-core.esm-bundler-C6U7i89U.js">
+    <link rel="stylesheet" crossorigin href="/assets/style-DNq6Ufhm.css">
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="app"></div>
   </body>
 </html>
