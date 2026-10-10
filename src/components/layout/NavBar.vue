@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
+import { Menu, Moon, Settings, Sun } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from '@/composables/useI18n'
 
@@ -56,13 +57,14 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
           :aria-label="settings.darkMode ? t('theme.toLight') : t('theme.toDark')"
           @click="settings.toggleDarkMode()"
         >
-          {{ settings.darkMode ? '☀️' : '🌙' }}
+          <Sun v-if="settings.darkMode" :size="18" />
+          <Moon v-else :size="18" />
         </button>
         <button class="sidebar-toggle" :aria-label="t('nav.drawer')" @click="settings.isDrawerOpen = true">
-          ☰
+          <Menu :size="20" />
         </button>
         <button class="right-sidebar-toggle" aria-label="打开功能面板" @click="settings.isPanelOpen = true">
-          ⚙️
+          <Settings :size="18" />
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch, type Component } from 'vue'
 import { useRouter } from 'vue-router'
+import { Clock, Gamepad2, Search } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from '@/composables/useI18n'
 import { useScrollLock } from '@/composables/useScrollLock'
@@ -22,9 +23,9 @@ const searchResults = computed<SearchEntry[]>(() => {
     .slice(0, 8)
 })
 
-const quickTools = [
-  { path: '/tools/clock', icon: '🕒', key: 'tool.clock' },
-  { path: '/tools/maimai', icon: '🎵', key: 'tool.maimai' },
+const quickTools: { path: string; icon: Component; key: string }[] = [
+  { path: '/tools/clock', icon: Clock, key: 'tool.clock' },
+  { path: '/tools/maimai', icon: Gamepad2, key: 'tool.maimai' },
 ]
 
 const recent = computed<SearchEntry[]>(() => {
@@ -69,7 +70,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <Transition name="panel">
+  <!-- 显式 :duration：过渡根 .right-panel 自身无动画，Vue 无法从根元素测得时长，
+       不指定会立即移除 enter/leave 类，子元素动画（overlay 淡入 + 侧栏滑入 + 节交错）全部不播放。
+       enter 900ms = 最晚一节 0.75s 延迟 + 0.15s 动画；leave 只需 overlay 0.2s -->
+  <Transition name="panel" :duration="{ enter: 900, leave: 300 }">
     <div v-if="settings.isPanelOpen" class="right-panel">
       <div class="right-sidebar-overlay" @click="close"></div>
       <aside class="right-sidebar">
@@ -90,7 +94,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
                 @focus="isSearchFocused = true"
                 @blur="isSearchFocused = false"
               />
-              <button type="submit" class="search-btn">🔍</button>
+              <button type="submit" class="search-btn" aria-label="搜索">
+                <Search :size="16" />
+              </button>
             </div>
           </form>
           <ul v-if="searchQuery.trim()" class="search-results">
@@ -110,7 +116,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           <ul class="tools-list">
             <li v-for="item in quickTools" :key="item.path" class="tool-item">
               <a :href="item.path" @click.prevent="go(item.path)">
-                <span class="tool-icon">{{ item.icon }}</span>
+                <span class="tool-icon"><component :is="item.icon" :size="16" /></span>
                 <span class="tool-name">{{ t(item.key) }}</span>
               </a>
             </li>

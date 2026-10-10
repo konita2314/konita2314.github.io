@@ -15,6 +15,12 @@
   --transition: all 0.3s ease;
 }
 
+/* 滚动条槽位常驻：面板/抽屉打开锁滚动时滚动条原地消失，视口宽度恒定，
+   页面内容与 fixed 元素（导航栏等）都不再发生水平位移（抖动） */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   background-color: var(--light);
@@ -27,7 +33,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-.App {
+.app {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -51,13 +57,15 @@ body {
 }
 
 .canvas-bg {
-  position: absolute;
+  /* fixed + pointer-events：粒子铺满视口且随滚动保持可见，不拦截任何点击 */
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   display: block;
   z-index: -1;
+  pointer-events: none;
 }
 
 /* 容器样式 */
@@ -333,6 +341,11 @@ html.dark-mode .hero-content {
   font-size: 1.1rem;
   border-radius: 2px;
 }
+
+/* 按钮逐个错峰入场（原 framer-motion 的 stagger） */
+.hero-buttons .btn:nth-child(1) { animation: fadeInUp 0.6s ease-out 0.5s both; }
+.hero-buttons .btn:nth-child(2) { animation: fadeInUp 0.6s ease-out 0.6s both; }
+.hero-buttons .btn:nth-child(3) { animation: fadeInUp 0.6s ease-out 0.7s both; }
 
 .btn {
   padding: 0.75rem 1.5rem;
@@ -675,9 +688,18 @@ html.dark-mode .hero-content {
   transform: translateY(0);
 }
 
+/* 工具/博客卡片入场：只淡入不位移。
+   - transform 动画会驱动 backdrop-filter 层逐帧重采样，Windows GPU 合成下表现为卡片上下抖动；
+   - 带延迟的入场必须加 backwards 填充，否则延迟期间卡片先以最终状态闪现，
+     动画开始时又跳回隐藏再升起（上下跳变）。 */
+@keyframes card-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* 工具卡片动画 */
 .tool-card {
-  animation: fadeInUp 0.6s ease-out;
+  animation: card-fade-in 0.6s ease-out backwards;
 }
 
 .tool-card:nth-child(2) {
@@ -690,7 +712,7 @@ html.dark-mode .hero-content {
 
 /* 博客卡片动画 */
 .blog-card {
-  animation: fadeInUp 0.6s ease-out;
+  animation: card-fade-in 0.6s ease-out backwards;
 }
 
 .blog-card:nth-child(2) {
@@ -702,6 +724,19 @@ html.dark-mode .hero-content {
 }
 
 /* 侧边栏样式 */
+/* 抽屉过渡根：与 .right-panel 对称 */
+.drawer-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1001; /* 与 .right-panel 一致：覆盖导航栏 */
+  pointer-events: none;
+}
+.drawer-root .sidebar-overlay,
+.drawer-root .sidebar { pointer-events: auto; }
+
 .sidebar-overlay {
   position: fixed;
   top: 0;
@@ -815,6 +850,20 @@ html.dark-mode .right-sidebar-toggle {
 }
 
 /* 右侧边栏样式 */
+/* 面板过渡根：fixed 全屏层。子元素（overlay/侧栏）是 fixed，根若留在普通文档流
+   （static、零高）虽不占布局，但语义与层级都不可靠；这里显式设为 fixed 层 */
+.right-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1001; /* 覆盖导航栏（1000）：侧边页置于最上层，遮罩压住导航 */
+  pointer-events: none; /* 子元素各自恢复点击 */
+}
+.right-panel .right-sidebar-overlay,
+.right-panel .right-sidebar { pointer-events: auto; }
+
 .right-sidebar-overlay {
   position: fixed;
   top: 0;
@@ -2410,7 +2459,8 @@ html.low-performance .blog-card, html.low-performance .btn,
 html.low-performance .v-enter-active, html.low-performance .v-leave-active,
 html.low-performance .panel-enter-active, html.low-performance .panel-leave-active,
 html.low-performance .drawer-enter-active, html.low-performance .drawer-leave-active,
-html.low-performance .popup-enter-active, html.low-performance .popup-leave-active
+html.low-performance .popup-enter-active, html.low-performance .popup-leave-active,
+html.low-performance .page-enter-active, html.low-performance .page-leave-active
 { animation: none !important; transition: none !important; }
 
 /* 导航右侧动作组（logo 之外：nav-links + 三个按钮） */
@@ -2481,6 +2531,12 @@ html.dark-mode .performance-popup p { color: #aaa; }
 @keyframes popup-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(20px); } }
 .popup-enter-active { animation: popup-in 0.4s ease-out both; }
 .popup-leave-active { animation: popup-out 0.2s ease-in both; }
+
+/* 路由切换淡入（仅 enter；旧视图无 leave 样式立即卸载，无双视图叠排）。
+   只用 opacity：transform 会在视图根上创建包含块/合成层，0.2s 动画结束移除 transform
+   时子元素（工具/博客卡片等）仍在播自己的入场动画，几何上下文突变导致卡片抖动 */
+@keyframes page-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.page-enter-active { animation: page-fade-in 0.2s ease-out; }
 
 /* 功能面板搜索结果 */
 .search-results {

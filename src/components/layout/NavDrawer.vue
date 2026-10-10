@@ -29,8 +29,10 @@ watch(
 </script>
 
 <template>
-  <!-- 移动端左侧导航抽屉（复用原 .sidebar CSS） -->
-  <Transition name="drawer">
+  <!-- 移动端左侧导航抽屉（复用原 .sidebar CSS）。
+       显式 :duration：过渡根 .drawer-root 自身无动画，Vue 无法从根元素测得时长，
+       不指定会立即移除 enter/leave 类，子元素（overlay/侧栏）动画全部不播放 -->
+  <Transition name="drawer" :duration="300">
     <div v-if="settings.isDrawerOpen" class="drawer-root">
       <div class="sidebar-overlay" @click="close"></div>
       <div class="sidebar">

@@ -24,7 +24,11 @@ watchEffect(() => {
     <PerformancePopup />
     <NavBar v-if="!settings.hideChrome" />
     <main class="main-content">
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <Transition name="page">
+          <component :is="Component" />
+        </Transition>
+      </RouterView>
     </main>
     <AppFooter v-if="!settings.hideChrome" />
     <RightPanel />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, useTemplateRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
@@ -196,18 +196,20 @@ function init() {
   window.addEventListener('scroll', onScroll)
 }
 
-// 必须先清理再启动；flush: 'post' 是关键——默认 flush 下 immediate 回调在
-// setup 阶段同步执行，此时 v-if 的 canvas 尚未挂载，canvasRef 为 null 直接 return，
-// 若初始 enabled=true 且之后无变化，背景将永远不启动（补丁 10）
-watch(
-  enabled,
-  () => {
-    cleanup()
-    if (!enabled.value || !canvasRef.value) return
-    init()
-  },
-  { immediate: true, flush: 'post' }
-)
+// 先清理再启动
+function start() {
+  cleanup()
+  if (!enabled.value || !canvasRef.value) return
+  init()
+}
+
+// 首轮启动必须放 onMounted（canvas 已挂载，canvasRef 可用）。
+// 实测 Vue 3.5 下 { immediate: true, flush: 'post' } 的 immediate 回调仍在
+// setup 阶段同步执行，彼时 v-if 的 canvas 未挂载，canvasRef 为 null 直接
+// return，且 enabled 不再变化 → 背景永远不启动（canvas 停在 300×150 默认尺寸）。
+// 后续低性能开关切换走 watch，flush: 'post' 保证 v-if 重渲染完成后 canvas 已挂载。
+watch(enabled, start, { flush: 'post' })
+onMounted(start)
 
 // 主题切换只重着色，不重建方块
 watch(
