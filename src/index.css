@@ -27,16 +27,23 @@ body {
   color: var(--dark);
   line-height: 1.6;
   overflow-x: hidden;
+  /* dvh = 动态视口高度：移动端地址栏收起/展开时 vh 恒为最大视口，
+     会让页面比可见区域高出一截，底部因此永远差一点点 */
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
+/* 页面骨架：竖向 flex，footer 是最后一个子元素。
+   min-height 撑满一屏 —— 内容短时 main-content 的 flex:1 把 footer 顶到屏幕底部；
+   内容长时页面自然增高，footer 落到页面最底部（下边缘与页面下边缘重合，不留缝） */
 .app {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* 几何背景元素 */
@@ -50,10 +57,20 @@ body {
   overflow: hidden;
 }
 
-/* 路由内容区域 */
+/* 路由内容区域：自身也做成竖向 flex —— 页面根节点要能拿到「剩余高度」才能拉伸；
+   padding-top 给 fixed 导航栏让位（.hero 的 min-height 复用同一个 80px 常量） */
 .main-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   padding-top: 80px;
+}
+
+/* 页面根节点填满剩余空间：内容不足一屏时被拉伸到「视口 − 导航栏 − footer」，
+   页面背景/垂直居中照样铺满，footer 下边缘正好压住屏幕底边；
+   内容超过一屏时按内容高度撑开，footer 跟随到页面底部 */
+.main-content > * {
+  flex: 1 1 auto;
 }
 
 .canvas-bg {
@@ -289,7 +306,11 @@ html.dark-mode .nav-link::before {
 
 /* 英雄区域样式 */
 .hero {
-  min-height: 100vh;
+  /* 首屏高度 = 视口 − 导航栏占位（.main-content 的 padding-top）；
+     旧写法 100vh 会在 80px 占位之上再叠一屏，让首屏比屏幕高出一截。
+     再套一层 dvh，移动端地址栏收放时也正好填满可见区域 */
+  min-height: calc(100vh - 80px);
+  min-height: calc(100dvh - 80px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1268,9 +1289,10 @@ html.dark-mode .right-sidebar .language-select:focus {
 }
 
 /* 工具页样式 */
+/* 高度交给 .main-content 的 flex 拉伸：再写 min-height:100vh 会叠上 80px 导航栏占位，
+   让内容很短的页面也永远比屏幕高，footer 被顶到屏幕外 */
 .tools-page {
   padding: 8rem 0 4rem;
-  min-height: 100vh;
 }
 
 .tools-tabs {
@@ -1534,9 +1556,9 @@ html.dark-mode .markdown-content pre {
 }
 
 /* 舞萌查分器页面样式 */
+/* min-height 同样交给 .main-content 拉伸，背景渐变才会跟着铺满剩余高度 */
 .maimai-page {
   padding: 8rem 0 4rem;
-  min-height: 100vh;
   background: linear-gradient(135deg, rgba(96, 165, 250, 0.05), rgba(52, 211, 153, 0.05));
 }
 
@@ -2564,7 +2586,8 @@ html.dark-mode .search-results { background: #2d2d2d; }
 
 /* 404 页 */
 .not-found-page {
-  min-height: 60vh;
+  /* 高度由 .main-content 的 flex 拉伸填满，内容垂直居中；
+     写死 min-height 会让它在矮屏上反而把 footer 推出屏幕 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2602,7 +2625,6 @@ html.dark-mode .search-results { background: #2d2d2d; }
 /* 关于页（原全部 inline style 转类，暗色走 html.dark-mode） */
 .about-page {
   padding: 8rem 0 4rem;
-  min-height: 100vh;
 }
 .about-container {
   display: flex;

@@ -27,9 +27,11 @@ export interface Bounds {
 }
 
 export interface ParticlePalette {
-  /** 静止状态的基础透明度（深色背景需要更不透一点才看得见） */
+  /** 静止状态的基础透明度 */
   alpha: number
   colors: readonly Rgb[]
+  /** 合成方式：深色底用 screen 让重叠处发亮，浅色底正常叠加 */
+  blend: 'source-over' | 'screen'
 }
 
 export interface Particle {
@@ -47,9 +49,14 @@ export interface Particle {
   colorTo: Rgb
   /** 颜色过渡进度 0..1 */
   colorT: number
+  /** 换色前的等待（秒）与过渡时长（秒）：每颗粒子都不一样，换色才会「一波接一波」 */
+  colorDelay: number
+  colorFade: number
   /** 颜色每变一次就 +1，渲染层据此让缓存的模糊贴图失效 */
   colorVersion: number
   colorKey: number
+  /** 缓存好的 rgb(...) 字符串，避免每帧拼接 */
+  colorCss: string
   /** 相对锚点的弹簧位移 */
   offsetX: number
   offsetY: number
@@ -60,6 +67,8 @@ export interface Particle {
   driftAmp: number
   /** 本层的镜头视差幅度（px）：近层大、远层小，按 1/距离 成等比 */
   parallax: number
+  /** 本层跟随页面滚动的比例：近层让得多、远层几乎不动 */
+  scrollFactor: number
   state: 'in' | 'alive' | 'out'
   /** 当前状态内的时间（秒；出生前为负数，用来错峰出场） */
   age: number
@@ -91,9 +100,19 @@ export interface FieldInput {
   pointer: PointerState
   /** 镜头位置（相对屏幕中心，-1..1）：各层按远近反向平移，形成视差 */
   camera: { x: number; y: number }
-  /** 滚动视差冲量（px，调用方维护衰减） */
-  scrollShift: number
+  /**
+   * 页面滚动位置（px）。滚动是无限制的，所以竖直方向按「环带」处理：
+   * 完全离开视口之后才回绕到另一侧，且落点同样在视口外 —— 永远看不到跳变。
+   */
+  scrollY: number
+  /** 竖直环带长度：粒子位置按它取模，滚动多远都在环带里循环 */
+  wrapSpan: number
+  /** 当前主题：重生时按主题取对应亮度的颜色 */
+  theme: ParticleTheme
 }
+
+/** 环带比视口多出来的那一段（全部落在屏幕外） */
+export const WRAP_MARGIN = 40
 
 // ---------------------------------------------------------------------------
 // 配色
@@ -108,10 +127,37 @@ const COLOR_POOL: readonly Rgb[] = [
   { r: 249, g: 115, b: 22 }, // 橙
 ]
 
-/** 两种主题共用同一组色相，只差基础透明度（与改造前的观感一致） */
+/**
+ * 深色模式的同一组色相（更亮）：切换主题时每颗粒子只在「自己这一色」的深浅两版之间过渡，
+ * 不会跳到别的颜色上去。
+ */
+const COLOR_POOL_DARK: readonly Rgb[] = [
+  { r: 147, g: 197, b: 253 }, // 蓝
+  { r: 110, g: 231, b: 183 }, // 绿
+  { r: 253, g: 224, b: 71 }, // 黄
+  { r: 251, g: 113, b: 133 }, // 粉
+  { r: 192, g: 132, b: 252 }, // 紫
+  { r: 253, g: 186, b: 116 }, // 橙
+]
+
+/**
+ * 两种主题：浅色底正常叠加（半透明淡彩）；
+ * 深色底改用 screen 混合 + 更高透明度 —— 重叠处越叠越亮，像彩色玻璃，而不是糊上一层灰。
+ * 两条 colors 数组索引一一对应，换主题时只改「亮度版本」，色相不变。
+ */
 export const PARTICLE_PALETTES: Record<ParticleTheme, ParticlePalette> = {
-  dark: { alpha: 0.15, colors: COLOR_POOL },
-  light: { alpha: 0.1, colors: COLOR_POOL },
+  dark: { alpha: 0.34, colors: COLOR_POOL_DARK, blend: 'screen' },
+  light: { alpha: 0.1, colors: COLOR_POOL, blend: 'source-over' },
+}
+
+/** 按主题取某个色相索引对应的颜色 */
+function paletteColor(theme: ParticleTheme, index: number): Rgb {
+  return PARTICLE_PALETTES[theme].colors[index] ?? COLOR_POOL[index]
+}
+
+/** 统一在这里拼颜色串，渲染层直接用缓存好的结果 */
+export function rgbCss(color: Rgb): string {
+  return `rgb(${color.r}, ${color.g}, ${color.b})`
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +198,17 @@ function parallaxFactor(depth: number): number {
   return Math.pow(PARALLAX_FAR / PARALLAX_NEAR, 1 - depth)
 }
 
+/**
+ * 滚动视差：页面每滚动 1px，各层在屏幕上让开多少 px。
+ *
+ * 和镜头视差同一套「1/距离」逻辑：近层让得多、远层让得少，所以滚动时
+ * 五层不是整体平移，而是各走各的速度 —— 这正是三维空间里应有的视差。
+ * 注意这也意味着长距离滚动后层与层会错开一段（物理上本来就该如此），
+ * 初始构图的堆叠约束只在第一屏严格成立。
+ */
+const SCROLL_NEAR = 0.2
+const SCROLL_FAR = 0.075
+
 // ---------------------------------------------------------------------------
 // 其它调参常量
 // ---------------------------------------------------------------------------
@@ -163,8 +220,7 @@ const LIFE_MIN = 34
 const LIFE_MAX = 74
 /** 同层内相邻两颗的出场间隔 */
 const STAGGER = 0.06
-/** 换主题时的颜色过渡时长 */
-const COLOR_FADE = 0.7
+
 /** 弹簧位移上限：鼠标再快也不会把粒子甩出画面 */
 const MAX_OFFSET = 92
 /** 推挤弹簧的刚度 / 阻尼（ζ ≈ 0.7，略欠阻尼，回位时有一点水的余韵） */
@@ -322,7 +378,19 @@ export function measureStack(
 /** 视口越大粒子越多；上下限压住绘制与重叠成本 */
 export function fieldCount(bounds: Bounds): number {
   const area = bounds.width * bounds.height
-  return clamp(Math.round(area / 95_000), 10, 26)
+  return clamp(Math.round(area / 95_000), 14, 52)
+}
+
+/**
+ * 竖直环带长度 = 视口高 + 最大粒子 + 两倍余量。
+ *
+ * 环带里的位置按模循环，视口对应环带的**最下面一段**：
+ * 粒子从顶部滚出去后会在环带上半段（屏幕外）继续走，走到底再回到视口下沿。
+ * 这样每颗粒子都保留自己的相位 —— 不会所有粒子挤在同一条线上「排队入场」。
+ */
+export function worldSpan(bounds: Bounds): number {
+  const maxSize = LAYERS[0].size * fieldSizeScale(bounds) * 1.1
+  return bounds.height + maxSize + WRAP_MARGIN * 2
 }
 
 /**
@@ -333,6 +401,8 @@ export function fieldSizeScale(bounds: Bounds): number {
   const side = Math.min(bounds.width, bounds.height)
   return clamp(side / 900, 0.45, 1.1)
 }
+
+
 
 /**
  * 按层级分配数量。
@@ -736,6 +806,7 @@ function syncColorKey(particle: Particle): void {
   if (key === particle.colorKey) return
   particle.colorKey = key
   particle.colorVersion += 1
+  particle.colorCss = rgbCss(particle.color)
 }
 
 interface CreateParticleOptions {
@@ -743,15 +814,16 @@ interface CreateParticleOptions {
   size: number
   layer: number
   colorIndex: number
+  /** 当前主题下这个色相的具体颜色 */
+  color: Rgb
   /** 同层内的出场序号，用来错峰 */
   index: number
 }
 
 function createParticle(options: CreateParticleOptions): Particle {
-  const { anchor, size, layer, colorIndex, index } = options
+  const { anchor, size, layer, colorIndex, color, index } = options
   const spec = LAYERS[layer]
   const depth = LAYER_COUNT > 1 ? layer / (LAYER_COUNT - 1) : 1
-  const color = COLOR_POOL[colorIndex]
   return {
     layer,
     depth,
@@ -763,8 +835,11 @@ function createParticle(options: CreateParticleOptions): Particle {
     colorFrom: { ...color },
     colorTo: { ...color },
     colorT: 1,
+    colorDelay: 0,
+    colorFade: 1,
     colorVersion: 0,
-    colorKey: -1,
+    colorKey: (color.r << 16) | (color.g << 8) | color.b,
+    colorCss: rgbCss(color),
     offsetX: 0,
     offsetY: 0,
     velX: 0,
@@ -772,6 +847,7 @@ function createParticle(options: CreateParticleOptions): Particle {
     phase: [rand(0, TAU), rand(0, TAU), rand(0, TAU), rand(0, TAU)],
     driftAmp: 9 + 21 * depth,
     parallax: PARALLAX_NEAR * parallaxFactor(depth),
+    scrollFactor: SCROLL_NEAR * Math.pow(SCROLL_FAR / SCROLL_NEAR, 1 - depth),
     state: 'in',
     // 负数年龄 = 还没出生：先按层错峰（越小越先），再按同层序号微错开
     age: -(spec.delay + index * STAGGER),
@@ -792,26 +868,29 @@ function createParticle(options: CreateParticleOptions): Particle {
  * 3. 轻推叠得过实的粒子，再把偶尔仍超限的挪开一点。
  * 结果是有疏有密的自然分布，而不是均匀网格，也不会糊成一团。
  */
-export function createField(bounds: Bounds): Particle[] {
+export function createField(bounds: Bounds, worldHeight = bounds.height, theme: ParticleTheme = 'light'): Particle[] {
+  // 布局铺满整个竖直环带：视口只显示环带最下面一段，上方的粒子已经排好队，
+  // 滚动时是一整条均匀的环带在走，不会出现「下方突然空掉」。
+  const world: Bounds = { width: bounds.width, height: worldHeight }
   const scale = fieldSizeScale(bounds)
-  const counts = distributeCounts(fieldCount(bounds))
+  const counts = distributeCounts(fieldCount(world))
   const field: Particle[] = []
 
   for (let layer = 0; layer < LAYER_COUNT; layer++) {
     const spec = LAYERS[layer]
     // 每层用自己的一组热点：各层的疏密位置不同，画面才不像一张平面贴图
-    const density = createDensity(bounds)
+    const density = createDensity(world)
     for (let index = 0; index < counts[layer]; index++) {
       const size = spec.size * scale * rand(0.9, 1.1)
-      const anchor = pickAnchor({ size, bounds, neighbors: field, density })
+      const anchor = pickAnchor({ size, bounds: world, neighbors: field, density })
       // 落点定了再挑颜色：和周围已有的颜色错开，屏幕上的色相才丰富
       const colorIndex = pickColorIndex(field, anchor.x, anchor.y, size)
-      field.push(createParticle({ anchor, size, layer, colorIndex, index }))
+      field.push(createParticle({ anchor, size, layer, colorIndex, index, color: paletteColor(theme, colorIndex) }))
     }
   }
 
-  relaxField(field, bounds)
-  enforceStackLimit(field, bounds)
+  relaxField(field, world)
+  enforceStackLimit(field, world)
 
   // 远处的先画，近处的压在上面 —— 层级顺序就是绘制顺序
   field.sort((a, b) => a.layer - b.layer)
@@ -822,7 +901,7 @@ export function createField(bounds: Bounds): Particle[] {
 // 生命周期
 // ---------------------------------------------------------------------------
 
-function respawn(particle: Particle, bounds: Bounds, field: readonly Particle[]): void {
+function respawn(particle: Particle, bounds: Bounds, field: readonly Particle[], theme: ParticleTheme): void {
   const spot = pickAnchor({
     size: particle.size,
     bounds,
@@ -841,7 +920,7 @@ function respawn(particle: Particle, bounds: Bounds, field: readonly Particle[])
     particle.size,
   )
   particle.colorIndex = colorIndex
-  particle.color = { ...COLOR_POOL[colorIndex] }
+  particle.color = { ...paletteColor(theme, colorIndex) }
   particle.colorFrom = { ...particle.color }
   particle.colorTo = { ...particle.color }
   particle.colorT = 1
@@ -885,11 +964,15 @@ function advanceLifecycle(particle: Particle, input: FieldInput, field: readonly
     return
   }
 
-  // out：一边变糊一边淡去，结束时换地方重生（绝不瞬移）
+  // out：入场动画的反向 —— 先保持不透明度、一路变糊，最后才淡出。
+  // （之前是先行淡出，等真正糊起来时粒子已经几乎看不见了，所以「退场没有模糊感」。）
   const t = clamp01(particle.age / FOCUS_OUT)
-  particle.focus = 1 - t
-  particle.alpha = 1 - smoothstep01(clamp01((t - 0.12) / 0.82))
-  if (t >= 1) respawn(particle, input.bounds, field)
+  particle.focus = 1 - easeInOutCubic(clamp01(t / 0.78))
+  particle.alpha = 1 - smoothstep01(clamp01((t - 0.3) / 0.7))
+  if (t >= 1) {
+    const span = input.wrapSpan > 0 ? input.wrapSpan : input.bounds.height
+    respawn(particle, { width: input.bounds.width, height: span }, field, input.theme)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -898,7 +981,11 @@ function advanceLifecycle(particle: Particle, input: FieldInput, field: readonly
 
 function advanceColor(particle: Particle, dt: number): void {
   if (particle.colorT >= 1) return
-  particle.colorT = Math.min(1, particle.colorT + dt / COLOR_FADE)
+  if (particle.colorDelay > 0) {
+    particle.colorDelay -= dt
+    return
+  }
+  particle.colorT = Math.min(1, particle.colorT + dt / particle.colorFade)
   const t = smoothstep01(particle.colorT)
   particle.color = {
     r: Math.round(particle.colorFrom.r + (particle.colorTo.r - particle.colorFrom.r) * t),
@@ -917,6 +1004,18 @@ function pointerRadius(bounds: Bounds): number {
 function advanceMotion(particle: Particle, input: FieldInput, radius: number): void {
   const { time } = input
 
+  // 屏幕基础位置：锚点 - 镜头视差 - 滚动视差
+  const baseX = particle.anchorX - input.camera.x * particle.parallax
+  const span = input.wrapSpan > 0 ? input.wrapSpan : input.bounds.height
+  // 竖直方向按环带取模：滚动多少都不会把粒子甩丢，也不会露边。
+  // 视口对应环带最下面一段 —— 粒子滚出顶部后先在环带上半段（屏幕外）继续走，走到底再回到底部入场，
+  // 每颗粒子都保留自己的相位，不会挤成一条线一起入场。
+  let torusY = particle.anchorY - input.camera.y * particle.parallax - input.scrollY * particle.scrollFactor
+  torusY = ((torusY % span) + span) % span
+  // 视口对应环带底部再往上一段余量，取模的接缝因此落在屏幕外
+  const visibleTop = Math.max(0, span - input.bounds.height - WRAP_MARGIN)
+  const baseY = torusY - visibleTop
+
   // 环境漂浮：两组相差一个数量级的频率叠加，走的是有界的慢速环流。
   // 位移上限 ≈ driftAmp，速度峰值只有每秒几像素 —— 这就是「水里的轻微漂浮」。
   const amp = particle.driftAmp
@@ -928,8 +1027,9 @@ function advanceMotion(particle: Particle, input: FieldInput, radius: number): v
 
   const { pointer } = input
   if (pointer.active) {
-    const centerX = particle.anchorX + particle.size * 0.5
-    const centerY = particle.anchorY + particle.size * 0.5
+    // 用屏幕上实际的位置算推挤距离（锚点可能已经被滚动带离屏幕）
+    const centerX = baseX + particle.size * 0.5
+    const centerY = baseY + particle.size * 0.5
     const dx = centerX - pointer.x
     const dy = centerY - pointer.y
     const distance = Math.hypot(dx, dy) || 1
@@ -965,16 +1065,59 @@ function advanceMotion(particle: Particle, input: FieldInput, radius: number): v
     particle.velY *= 0.35
   }
 
-  // 镜头视差：近层让开得多、远层几乎不动 —— 五层玻璃的厚度就出来了。
-  // 横竖两个方向的镜头平移、以及滚动，都按同一个层间速度比缩放。
-  const parallaxShare = particle.parallax / PARALLAX_NEAR
-  particle.renderX = particle.anchorX + driftX + particle.offsetX - input.camera.x * particle.parallax
-  particle.renderY =
-    particle.anchorY +
-    driftY +
-    particle.offsetY -
-    input.camera.y * particle.parallax +
-    input.scrollShift * parallaxShare
+  particle.renderX = baseX + driftX + particle.offsetX
+  particle.renderY = baseY + driftY + particle.offsetY
+}
+
+/**
+ * 运行中的横向分离。
+ *
+ * 五层按不同速度随滚动滑动，久而久之不同层的粒子会偶然叠到同一位置，
+ * 屏幕上就出现一小块「过于密集」的地方。速度差不能动，那就让叠得太实的粒子
+ * 自己慢慢让开一条缝：只挪横向（纵向归滚动管），每帧最多几十像素/秒，
+ * 到达「不再过密」就停 —— 既不动构图，也几乎没有存在感。
+ */
+const SEPARATE_DEPTH = 0.66
+const SEPARATE_RATE = 0.55
+const SEPARATE_MAX_SPEED = 24
+const SEPARATE_MARGIN = 24
+
+function separateDeepStacks(field: Particle[], input: FieldInput): void {
+  const { bounds, dt } = input
+  const width = bounds.width
+  const height = bounds.height
+
+  for (let i = 0; i < field.length; i++) {
+    const a = field[i]
+    if (a.renderY > height + SEPARATE_MARGIN || a.renderY + a.size < -SEPARATE_MARGIN) continue
+    for (let j = i + 1; j < field.length; j++) {
+      const b = field[j]
+      if (b.renderY > height + SEPARATE_MARGIN || b.renderY + b.size < -SEPARATE_MARGIN) continue
+
+      const minSide = Math.min(a.size, b.size)
+      const dx = b.renderX + b.size * 0.5 - (a.renderX + a.size * 0.5)
+      const dy = b.renderY + b.size * 0.5 - (a.renderY + a.size * 0.5)
+      const overlapX = (a.size + b.size) * 0.5 - Math.abs(dx)
+      const overlapY = (a.size + b.size) * 0.5 - Math.abs(dy)
+      if (overlapX <= 0 || overlapY <= 0) continue
+
+      const depth = Math.min(overlapX, overlapY) / minSide
+      if (depth <= SEPARATE_DEPTH) continue
+
+      const speed = Math.min(SEPARATE_MAX_SPEED, (depth - SEPARATE_DEPTH) * minSide * SEPARATE_RATE * 4)
+      const push = speed * dt * 0.5
+      // 中心几乎重合时按序号定一个方向，避免互相「推不动」
+      const direction = dx > 0.5 ? 1 : dx < -0.5 ? -1 : i % 2 === 0 ? 1 : -1
+      a.anchorX -= direction * push
+      b.anchorX += direction * push
+    }
+  }
+
+  for (const particle of field) {
+    const minX = -particle.size * 0.4
+    const maxX = width - particle.size * 0.6
+    particle.anchorX = maxX > minX ? clamp(particle.anchorX, minX, maxX) : (width - particle.size) * 0.5
+  }
 }
 
 /** 每帧推进整块粒子场 */
@@ -985,6 +1128,7 @@ export function stepField(field: Particle[], input: FieldInput): void {
     advanceColor(particle, input.dt)
     advanceMotion(particle, input, radius)
   }
+  if (input.dt > 0) separateDeepStacks(field, input)
 }
 
 /**
@@ -1023,26 +1167,23 @@ export function resizeField(field: Particle[], from: Bounds, to: Bounds): void {
 }
 
 /** 换主题：重新抽一套颜色，并做一次柔和过渡（视野里的颜色不会硬切） */
-export function recolorField(field: Particle[], instant = false): void {
-  // 打乱顺序逐颗挑色，避免「后换的永远让着先换的」
-  const slots: ColorSlot[] = []
-  for (const particle of shuffle([...field])) {
-    const index = pickColorIndex(slots, particle.anchorX, particle.anchorY, particle.size)
-    slots.push({
-      anchorX: particle.anchorX,
-      anchorY: particle.anchorY,
-      size: particle.size,
-      colorIndex: index,
-    })
+/**
+ * 换主题：每颗粒子只在自己这一色相的深浅两版之间过渡，不重新抽色。
+ * 时长/延迟带一点随机，切换时像一层光晕扫过，但落点一定是目标主题的那一版。
+ */
+export function recolorField(field: Particle[], theme: ParticleTheme, instant = false): void {
+  for (const particle of field) {
     particle.colorFrom = { ...particle.color }
-    particle.colorTo = { ...COLOR_POOL[index] }
-    particle.colorIndex = index
+    particle.colorTo = { ...paletteColor(theme, particle.colorIndex) }
     if (instant) {
       particle.color = { ...particle.colorTo }
       particle.colorT = 1
+      particle.colorDelay = 0
       syncColorKey(particle)
     } else {
       particle.colorT = 0
+      particle.colorDelay = rand(0, 0.22)
+      particle.colorFade = rand(0.4, 0.7)
     }
   }
 }
@@ -1065,7 +1206,15 @@ export function lodWeights(focus: number): [number, number, number] {
   return [heavy, light, sharp]
 }
 
-/** 入场模糊量：远层从更模糊的状态合焦，近层本来就该更快变清楚 */
-export function entryBlurFactor(particle: Particle): number {
-  return 0.07 + 0.05 * (1 - particle.depth)
+/**
+ * 入场时两档模糊贴图的高斯半径（CSS px）。
+ * 远层从更糊的状态合焦；同时给一个绝对像素下限 ——
+ * 手机上粒子本来就小，纯按比例算出来的模糊只有两三像素，等于没有效果。
+ */
+export function entryBlurRadius(particle: Particle): { heavy: number; light: number } {
+  const relative = 0.08 + 0.05 * (1 - particle.depth)
+  return {
+    heavy: Math.max(particle.size * relative, 18),
+    light: Math.max(particle.size * 0.04, 7),
+  }
 }

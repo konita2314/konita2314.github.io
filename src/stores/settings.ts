@@ -10,6 +10,8 @@ const PERF_KEY = 'performanceOptimization'
 const POPUP_KEY = 'performancePopupShown'
 const LOCALE_KEY = 'locale'
 const VISITS_KEY = 'recentVisits'
+// 'on' / 'off'；null = 默认开启（移动端）
+const GYRO_KEY = 'cameraGyro'
 const VISIT_LIMIT = 6
 
 function readStorage(key: string): string | null {
@@ -46,6 +48,10 @@ function initLowPerformance(): boolean {
   return readStorage(PERF_KEY) === 'disabled'
 }
 
+function initGyroscope(): boolean {
+  return readStorage(GYRO_KEY) !== 'off'
+}
+
 function initLocale(): string {
   return readStorage(LOCALE_KEY) ?? 'zh-CN'
 }
@@ -70,6 +76,7 @@ export function hasPerformancePopupShown(): boolean {
 export const useSettingsStore = defineStore('settings', () => {
   const darkMode = ref(initDark())
   const lowPerformance = ref(initLowPerformance())
+  const gyroscope = ref(initGyroscope())
   const locale = ref(initLocale())
   const recentVisits = ref<string[]>(initRecentVisits())
   const isPanelOpen = ref(false)
@@ -88,6 +95,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function setLowPerformance(value: boolean) {
     lowPerformance.value = value
     writeStorage(PERF_KEY, value ? 'disabled' : 'enabled')
+  }
+
+  function setGyroscope(value: boolean) {
+    gyroscope.value = value
+    writeStorage(GYRO_KEY, value ? 'on' : 'off')
   }
 
   function setLocale(value: string) {
@@ -119,6 +131,7 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     darkMode,
     lowPerformance,
+    gyroscope,
     locale,
     recentVisits,
     isPanelOpen,
@@ -127,6 +140,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setDarkMode,
     toggleDarkMode,
     setLowPerformance,
+    setGyroscope,
     setLocale,
     recordVisit,
     markPerformancePopupShown,

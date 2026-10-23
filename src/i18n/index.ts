@@ -27,6 +27,11 @@ const dict: Record<string, Entry> = {
     'zh-TW': '低效能模式',
     'en-US': 'Low Performance Mode',
   },
+  'panel.setting.gyroscope': {
+    'zh-CN': '陀螺仪视角',
+    'zh-TW': '陀螺儀視角',
+    'en-US': 'Gyroscope Camera',
+  },
   'tool.clock': { 'zh-CN': '时钟', 'zh-TW': '時鐘', 'en-US': 'Clock' },
   'tool.maimai': { 'zh-CN': '舞萌查分', 'zh-TW': '舞萌查分', 'en-US': 'Maimai Scores' },
   'popup.title': { 'zh-CN': '性能优化', 'zh-TW': '效能最佳化', 'en-US': 'Performance' },

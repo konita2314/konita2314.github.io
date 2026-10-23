@@ -1,13 +1,17 @@
 <!-- 关于页：原 AboutPage.tsx 迁移（头像静态化，inline style 转 CSS 类，暗色走 html.dark-mode） -->
+<script setup lang="ts">
+import { AVATAR_URL } from '@/utils/avatar'
+</script>
+
 <template>
   <section class="about-page">
     <div class="container">
       <div class="about-container">
-        <!-- 头像：静态 URL，删除原 fetch/loading 流程 -->
+        <!-- 头像：URL 与预加载同源（主页空闲时会先取一次，进页即显） -->
         <div class="avatar-section">
           <img
             class="avatar-img"
-            src="https://github.com/konita2314.png"
+            :src="AVATAR_URL"
             alt="Konita's GitHub Avatar"
             width="180"
             height="180"

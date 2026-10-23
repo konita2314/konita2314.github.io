@@ -6,11 +6,14 @@ import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from '@/composables/useI18n'
 import { useScrollLock } from '@/composables/useScrollLock'
 import { getSearchIndex, type SearchEntry } from '@/utils/blog'
+import { isMobileDevice, requestGyroPermission } from '@/utils/device'
 
 const settings = useSettingsStore()
 const { t } = useI18n()
 const router = useRouter()
 const { lock, unlock } = useScrollLock()
+
+const showGyroscope = isMobileDevice()
 
 const searchQuery = ref('')
 const isSearchFocused = ref(false)
@@ -43,6 +46,18 @@ function close() {
 function go(path: string) {
   close()
   void router.push(path)
+}
+
+async function toggleGyroscope(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.checked) {
+    settings.setGyroscope(false)
+    return
+  }
+  // 点击本身就是用户手势：iOS 的方向传感器授权必须在这里申请
+  const granted = await requestGyroPermission()
+  settings.setGyroscope(granted)
+  input.checked = granted
 }
 
 function submitSearch() {
@@ -135,7 +150,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           </ul>
         </div>
 
-        <!-- 设置：两项接 store -->
+        <!-- 设置：深色 / 低性能 / 陀螺仪（移动端） -->
         <div class="settings-section">
           <h3>{{ t('panel.settings') }}</h3>
           <div class="setting-item">
@@ -158,6 +173,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
                 class="toggle-input"
                 :checked="settings.lowPerformance"
                 @change="settings.setLowPerformance(!settings.lowPerformance)"
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div v-if="showGyroscope" class="setting-item">
+            <span class="setting-label">{{ t('panel.setting.gyroscope') }}</span>
+            <label class="toggle-switch">
+              <input
+                type="checkbox"
+                class="toggle-input"
+                :checked="settings.gyroscope"
+                @change="toggleGyroscope"
               />
               <span class="toggle-slider"></span>
             </label>

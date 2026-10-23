@@ -1,4 +1,13 @@
 <!-- 首页：原 HomePage.tsx 迁移（framer 双重动画已删，CSS fadeInUp 保留） -->
+<script setup lang="ts">
+import { onMounted } from 'vue'
+import { preloadAvatar } from '@/utils/avatar'
+
+// 主页挂载后：等首屏 load 完成，空闲时预加载关于页头像，
+// 这样点开关于页立刻就有头像，不用等网络（失败会退避重试）
+onMounted(preloadAvatar)
+</script>
+
 <template>
   <section id="home" class="hero">
     <div class="container">
