@@ -28,6 +28,11 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enable_jekyll: false
+          # 把 Pages 发布源强制切回「GitHub Actions」。
+          # 若发布源被改成「Deploy from a branch / main (root)」，Pages 会发布仓库源码
+          # （index.html 引用 /src/main.ts，.ts 被当成 video/mp2t，整站白屏），
+          # 并且每次 push 都会用源码覆盖 Actions 的构建产物。
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
