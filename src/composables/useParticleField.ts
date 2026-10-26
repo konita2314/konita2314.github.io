@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted, watch, type ShallowRef } from 'vue'
-import { gyroSupported, needsGyroPermission, requestGyroPermission, screenAngle } from '@/utils/device'
+import { gyroSupported, needsGyroPermission, requestGyroAccess, screenAngle } from '@/utils/device'
+import { poseQuaternion, tiltSince, type Quaternion } from '@/utils/deviceTilt'
 import {
   PARTICLE_PALETTES,
   createField,
@@ -52,13 +53,32 @@ export interface UseParticleFieldOptions {
   gyroscope: () => boolean
 }
 
-/** 陀螺仪读数换算镜头的比例：倾斜多少度算「推满」 */
+/** 陀螺仪读数换算镜头的比例：倾斜多少度算「推满」。度是物理量，各设备读数因此一致 */
 const GYRO_RANGE_DEG = 22
+
+/** 挂上监听后等第一帧读数的时间；到点还没有读数，才判定为「尚未授权」 */
+const GYRO_PROBE_MS = 1200
+
+/**
+ * 陀螺仪状态（同时写到 canvas 的 data-gyro 上，真机排查时能直接看出卡在哪一步）：
+ * - off：设置里关掉了 / 当前是静止背景
+ * - probing：已挂监听，等第一帧读数
+ * - prompt：没等到读数，等一次用户手势去申请权限
+ * - granted：有读数，正在生效
+ * - denied：用户拒绝过，不再重复询问
+ * - unsupported：没有方向传感器（或没有权限模型也收不到读数）
+ */
+type GyroState = 'off' | 'probing' | 'prompt' | 'granted' | 'denied' | 'unsupported'
 
 /** 单帧最大步长：切标签页回来 / 掉帧时不让物理一步跳太远 */
 const MAX_STEP = 0.05
 
 let canvasFilterSupported: boolean | null = null
+
+/** 夹到 -1..1：陀螺仪倾斜超出量程时，镜头停在边缘而不是继续外推 */
+function clampUnit(value: number): number {
+  return value < -1 ? -1 : value > 1 ? 1 : value
+}
 
 function supportsCanvasFilter(): boolean {
   if (canvasFilterSupported === null) {
@@ -104,11 +124,17 @@ export function useParticleField(
   /** 镜头：指针相对屏幕中心的位置（-1..1），平滑跟随，驱动各层视差 */
   const camera = { x: 0, y: 0 }
   /**
-   * 陀螺仪：以「启用那一刻的握持角度」为原点，之后左右/前后倾斜换算成镜头位置。
-   * 只依赖相对角度，所以横竖屏、怎么拿着手机都不影响。
+   * 陀螺仪：以「启用那一刻的握持角度」为原点，之后绕屏幕上轴 / 右轴的转动换算成镜头位置。
+   * 只依赖相对姿态（四元数），横竖屏、怎么拿着手机都不影响，竖直握持时也不会爆量。
    */
-  const gyro = { x: 0, y: 0, active: false, baseline: null as { beta: number; gamma: number } | null }
+  const gyro = { x: 0, y: 0, active: false, baseline: null as Quaternion | null }
   let gyroListening = false
+  let gyroState: GyroState = 'off'
+  let gyroProbeTimer = 0
+  /** 用户手势里已经申请过一次权限（避免「授权成功但没读数」时反复询问） */
+  let gyroAsked = false
+  /** 正在等一次用户手势去申请权限 */
+  let waitingGyroGesture = false
   let lastScreenAngle = -1
 
   function viewport(): Bounds {
@@ -197,71 +223,147 @@ export function useParticleField(
     lastScrollY = window.scrollY
   }
 
+  /** 授权/工作状态写到 canvas 的 data-gyro 上：真机排查时一眼看出卡在哪一步 */
+  function markGyroState(state: GyroState): void {
+    if (state === gyroState) return
+    gyroState = state
+    const element = canvas.value
+    if (element) element.dataset.gyro = state
+  }
+
+  function clearProbeTimer(): void {
+    if (!gyroProbeTimer) return
+    window.clearTimeout(gyroProbeTimer)
+    gyroProbeTimer = 0
+  }
+
   function onDeviceOrientation(event: DeviceOrientationEvent): void {
     if (event.beta === null || event.gamma === null) return
 
-    // 横竖屏切换后 beta / gamma 的含义会变，重新取基准
+    // 横竖屏切换后设备坐标的含义变了，重新取基准
     const angle = screenAngle()
     if (angle !== lastScreenAngle) {
       lastScreenAngle = angle
       gyro.baseline = null
     }
 
-    // 按屏幕方向把设备坐标换成「左右倾斜 / 前后倾斜」
-    let tiltX = event.gamma
-    let tiltY = event.beta
-    if (angle === 90) {
-      tiltX = event.beta
-      tiltY = -event.gamma
-    } else if (angle === 270) {
-      tiltX = -event.beta
-      tiltY = event.gamma
-    } else if (angle === 180) {
-      tiltX = -event.gamma
-      tiltY = -event.beta
-    }
+    // 欧拉角先还原成姿态四元数：竖直握持（beta≈±90°）时 beta/gamma 会翻跟头，
+    // 四元数不会 —— 这是「同一段动作在 iPad 上不动、在 Android 上炸开」的根因
+    const pose = poseQuaternion({ alpha: event.alpha, beta: event.beta, gamma: event.gamma })
 
     if (!gyro.baseline) {
       // 第一次读数就是「视角原点」：用户当前怎么拿着，画面就在正中
-      gyro.baseline = { beta: tiltY, gamma: tiltX }
+      gyro.baseline = pose
+      gyro.active = true
+      clearProbeTimer()
+      markGyroState('granted')
       return
     }
 
-    gyro.x = Math.max(-1, Math.min(1, (tiltX - gyro.baseline.gamma) / GYRO_RANGE_DEG))
-    gyro.y = Math.max(-1, Math.min(1, (tiltY - gyro.baseline.beta) / GYRO_RANGE_DEG))
+    const tilt = tiltSince(gyro.baseline, pose, angle)
+    gyro.x = clampUnit(tilt.x / GYRO_RANGE_DEG)
+    gyro.y = clampUnit(tilt.y / GYRO_RANGE_DEG)
     gyro.active = true
+    clearProbeTimer()
+    markGyroState('granted')
   }
 
   function attachGyro(): void {
     if (gyroListening) return
+    lastScreenAngle = screenAngle()
     window.addEventListener('deviceorientation', onDeviceOrientation, { passive: true })
     gyroListening = true
   }
 
-  function onFirstGesture(): void {
-    window.removeEventListener('pointerdown', onFirstGesture)
-    void requestGyroPermission().then((granted) => {
-      if (granted && running && playable() && options.gyroscope()) attachGyro()
+  function stopWaitingForGesture(): void {
+    if (!waitingGyroGesture) return
+    window.removeEventListener('click', onGyroGesture, { capture: true })
+    waitingGyroGesture = false
+  }
+
+  /** 撤掉监听、计时器与待办手势，并把镜头交还给指针 */
+  function teardownGyro(): void {
+    if (gyroListening) window.removeEventListener('deviceorientation', onDeviceOrientation)
+    gyroListening = false
+    stopWaitingForGesture()
+    clearProbeTimer()
+    gyro.active = false
+    gyro.baseline = null
+    gyro.x = 0
+    gyro.y = 0
+  }
+
+  /**
+   * 一进页面就先挂上监听：有权限时读数立刻进来，完全不用等；
+   * 到点还没有读数，才判定为「还没授权」→ 等一次用户手势去申请。
+   */
+  function watchGyroPermission(): void {
+    if (gyroProbeTimer) return
+    gyroProbeTimer = window.setTimeout(onGyroProbeTimeout, GYRO_PROBE_MS)
+  }
+
+  function onGyroProbeTimeout(): void {
+    gyroProbeTimer = 0
+    if (!running || !playable() || !options.gyroscope()) return
+    if (gyroState === 'granted') return
+    // 已经问过权限、也拿到了授权，却一直没有读数 → 这台设备没有方向传感器，
+    // 不必再等下一次点击重复询问
+    if (gyroAsked) {
+      markGyroState('unsupported')
+      teardownGyro()
+      return
+    }
+    if (needsGyroPermission()) {
+      markGyroState('prompt')
+      waitForGyroGesture()
+      return
+    }
+    // 没有权限模型、又一直收不到读数：这台设备就是没有方向传感器
+    markGyroState('unsupported')
+  }
+
+  function waitForGyroGesture(): void {
+    if (waitingGyroGesture) return
+    waitingGyroGesture = true
+    // click 才是 Safari 认可的用户手势；capture 保证赶在路由跳转、抽屉关闭之前发出去
+    window.addEventListener('click', onGyroGesture, { capture: true, once: true })
+  }
+
+  function onGyroGesture(): void {
+    waitingGyroGesture = false
+    gyroAsked = true
+    void requestGyroAccess().then((access) => {
+      if (!running || !options.gyroscope()) return
+      if (access === 'granted') {
+        // 授权后读数会自己进来（第一帧读数会把状态标成 granted）
+        gyro.baseline = null
+        if (!gyroListening) attachGyro()
+        if (gyroState !== 'granted') markGyroState('probing')
+        watchGyroPermission()
+        return
+      }
+      markGyroState(access === 'denied' ? 'denied' : 'unsupported')
+      teardownGyro()
     })
   }
 
-  /** 按当前设置决定是否挂陀螺仪监听（iOS 需要先过一次用户手势拿权限） */
+  /**
+   * 按当前设置挂/撤陀螺仪。
+   * 有权限 → 立刻生效；没权限 → 先静默等读数，再在首次点击时申请（iOS 必须带手势）。
+   */
   function syncGyroscope(): void {
     const wanted = running && playable() && options.gyroscope() && gyroSupported()
     if (!wanted) {
-      if (gyroListening) window.removeEventListener('deviceorientation', onDeviceOrientation)
-      window.removeEventListener('pointerdown', onFirstGesture)
-      gyroListening = false
-      gyro.active = false
-      gyro.baseline = null
+      teardownGyro()
+      markGyroState(gyroSupported() ? 'off' : 'unsupported')
       return
     }
     if (gyroListening) return
-    if (needsGyroPermission()) {
-      window.addEventListener('pointerdown', onFirstGesture, { passive: true })
-      return
-    }
+    // 拒绝过就不再试探：系统不会再弹窗，重试也拿不到读数
+    if (gyroState === 'denied') return
     attachGyro()
+    markGyroState('probing')
+    watchGyroPermission()
   }
 
   function onPageHide(): void {
@@ -566,9 +668,8 @@ export function useParticleField(
     if (rafId) cancelAnimationFrame(rafId)
     rafId = 0
     removeListeners()
-    window.removeEventListener('deviceorientation', onDeviceOrientation)
-    window.removeEventListener('pointerdown', onFirstGesture)
-    gyroListening = false
+    teardownGyro()
+    markGyroState(gyroSupported() ? 'off' : 'unsupported')
     sprites.clear()
     particles = []
     ctx = null

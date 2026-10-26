@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "type-check": "vue-tsc -b",
     "verify:field": "node scripts/verify-particle-field.ts",
+    "verify:gyro": "node scripts/verify-device-tilt.ts",
     "lint": "eslint .",
-    "deploy": "npm run build && gh-pages -d dist"
+    "deploy": "npm run build && node scripts/ship.mjs"
   },
   "dependencies": {
     "highlight.js": "^11.12.0",
@@ -27,7 +28,6 @@
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^10.12.0",
     "eslint-plugin-vue": "^10.11.1",
-    "gh-pages": "^6.3.0",
     "typescript": "~5.9.3",
     "vite": "^8.3.4",
     "vue-tsc": "^3.3.12"

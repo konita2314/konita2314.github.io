@@ -3,7 +3,8 @@
   "include": [
     "vite.config.ts",
     "scripts/**/*",
-    "src/utils/particleField.ts"
+    "src/utils/particleField.ts",
+    "src/utils/deviceTilt.ts"
   ],
   "compilerOptions": {
     "composite": true,

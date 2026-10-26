@@ -65,7 +65,7 @@ export interface Particle {
   /** 环境漂浮的相位（四个错开的频率各用一个） */
   phase: [number, number, number, number]
   driftAmp: number
-  /** 本层的镜头视差幅度（px）：近层大、远层小，按 1/距离 成等比 */
+  /** 本层的镜头视差幅度（px，PARALLAX_REF 视口下的值，运行时按视口等比换算） */
   parallax: number
   /** 本层跟随页面滚动的比例：近层让得多、远层几乎不动 */
   scrollFactor: number
@@ -189,9 +189,15 @@ const LAYERS: readonly LayerSpec[] = [
  * 真实透视里，屏幕位移 ∝ 1 / 距离。五层玻璃按「距离成等比」摆放，
  * 各层位移也就该成等比：相邻两层的速度比恒定。
  * （线性递减会把远层之间拉得很开、近层之间几乎没差别，正是「不像五层」的原因。）
+ *
+ * 这两个数是 PARALLAX_REF 视口下的像素值；其它尺寸按视口等比换算（见 stepField），
+ * 否则同一段倾斜在大屏（iPad）上几乎看不出来、在手机上又晃得厉害。
  */
 const PARALLAX_NEAR = 30
 const PARALLAX_FAR = 5
+
+/** 视差换算的基准视口：这组尺寸下 30px / 5px 就是屏幕上真实的像素数 */
+export const PARALLAX_REF: Bounds = { width: 1280, height: 800 }
 
 /** 景深 0..1 → 相对最近层的视差系数：最远层只有最近层的 1/6 速度 */
 function parallaxFactor(depth: number): number {
@@ -1001,16 +1007,22 @@ function pointerRadius(bounds: Bounds): number {
 }
 
 
-function advanceMotion(particle: Particle, input: FieldInput, radius: number): void {
+function advanceMotion(
+  particle: Particle,
+  input: FieldInput,
+  radius: number,
+  parallaxX: number,
+  parallaxY: number,
+): void {
   const { time } = input
 
-  // 屏幕基础位置：锚点 - 镜头视差 - 滚动视差
-  const baseX = particle.anchorX - input.camera.x * particle.parallax
+  // 屏幕基础位置：锚点 - 镜头视差 - 滚动视差（镜头视差已按视口等比换算）
+  const baseX = particle.anchorX - input.camera.x * particle.parallax * parallaxX
   const span = input.wrapSpan > 0 ? input.wrapSpan : input.bounds.height
   // 竖直方向按环带取模：滚动多少都不会把粒子甩丢，也不会露边。
   // 视口对应环带最下面一段 —— 粒子滚出顶部后先在环带上半段（屏幕外）继续走，走到底再回到底部入场，
   // 每颗粒子都保留自己的相位，不会挤成一条线一起入场。
-  let torusY = particle.anchorY - input.camera.y * particle.parallax - input.scrollY * particle.scrollFactor
+  let torusY = particle.anchorY - input.camera.y * particle.parallax * parallaxY - input.scrollY * particle.scrollFactor
   torusY = ((torusY % span) + span) % span
   // 视口对应环带底部再往上一段余量，取模的接缝因此落在屏幕外
   const visibleTop = Math.max(0, span - input.bounds.height - WRAP_MARGIN)
@@ -1123,10 +1135,14 @@ function separateDeepStacks(field: Particle[], input: FieldInput): void {
 /** 每帧推进整块粒子场 */
 export function stepField(field: Particle[], input: FieldInput): void {
   const radius = pointerRadius(input.bounds)
+  // 镜头视差按视口等比换算：镜头推到 ±1 时，各层让开的距离始终是「视口的固定比例」，
+  // 而不是固定像素 —— 同一段倾斜在 iPad 和手机上看起来才一致。
+  const parallaxX = input.bounds.width / PARALLAX_REF.width
+  const parallaxY = input.bounds.height / PARALLAX_REF.height
   for (const particle of field) {
     advanceLifecycle(particle, input, field)
     advanceColor(particle, input.dt)
-    advanceMotion(particle, input, radius)
+    advanceMotion(particle, input, radius, parallaxX, parallaxY)
   }
   if (input.dt > 0) separateDeepStacks(field, input)
 }

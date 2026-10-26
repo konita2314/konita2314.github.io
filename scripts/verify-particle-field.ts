@@ -511,6 +511,62 @@ for (const bounds of VIEWPORTS) {
   }
 }
 
+interface CameraParallaxFraction {
+  label: string
+  /** 最近一层在镜头推到 ±1 时让开的距离占视口的比例 */
+  x: number
+  y: number
+}
+
+/**
+ * 镜头视差必须「按视口等比」：镜头推到 ±1 时让开的距离应该是视口的固定比例，
+ * 而不是固定像素 —— 否则同一段倾斜在大屏（iPad）上几乎看不出来、在手机上又晃得厉害。
+ */
+function measureCameraParallaxFraction(): CameraParallaxFraction[] {
+  const viewports: Bounds[] = [
+    { width: 1280, height: 800 },
+    { width: 1024, height: 768 },
+    { width: 390, height: 844 },
+    { width: 2560, height: 1440 },
+  ]
+  return viewports.map((bounds) => {
+    const field = createField(bounds)
+    const input = {
+      time: 0,
+      dt: 0,
+      bounds,
+      pointer: { x: 0, y: 0, active: false, energy: 0 },
+      camera: { x: 0, y: 0 },
+      scrollY: 0,
+      wrapSpan: 1e9,
+      theme: 'light' as const,
+    }
+    settleField(field, input)
+    const before = field.map((particle) => ({ x: particle.renderX, y: particle.renderY }))
+    stepField(field, { ...input, camera: { x: 1, y: 1 } })
+
+    const near = LAYER_COUNT - 1
+    let sumX = 0
+    let sumY = 0
+    let count = 0
+    field.forEach((particle, index) => {
+      if (particle.layer !== near) return
+      const dx = Math.abs(particle.renderX - before[index].x)
+      const dy = Math.abs(particle.renderY - before[index].y)
+      // 跨过环带接缝的那几颗会「跳」一整圈，和镜头位移无关，剔除
+      if (dx > bounds.width || dy > bounds.height) return
+      sumX += dx
+      sumY += dy
+      count++
+    })
+    return {
+      label: `${bounds.width}x${bounds.height}`,
+      x: count > 0 ? sumX / count / bounds.width : 0,
+      y: count > 0 ? sumY / count / bounds.height : 0,
+    }
+  })
+}
+
 const parallax = measureLayerParallax()
 const shifts = parallax.map((item) => item.shift)
 const ratios = shifts.slice(1).map((shift, index) => shift / Math.max(0.001, shifts[index]))
@@ -545,6 +601,28 @@ if (nearFar < 4 || nearFar > 10) {
 }
 if (ratioSpread > 1.25) {
   failures.push(`相邻层速度比不均匀（${ratioSpread.toFixed(2)}× 波动），应该成等比而不是等差`)
+}
+
+const fractions = measureCameraParallaxFraction()
+const fractionBase = fractions[0]
+console.log(
+  `镜头视差占视口的比例（最近层、镜头 ±1）：${fractions
+    .map((item) => `${item.label} 横 ${(item.x * 100).toFixed(2)}% 纵 ${(item.y * 100).toFixed(2)}%`)
+    .join(' | ')}`,
+)
+for (const fraction of fractions) {
+  if (Math.abs(fraction.x - fractionBase.x) > 0.0002) {
+    failures.push(
+      `${fraction.label} 的横向视差占比 ${(fraction.x * 100).toFixed(2)}% 与 ${fractionBase.label} 的 ` +
+        `${(fractionBase.x * 100).toFixed(2)}% 不一致：镜头位移没有按视口等比换算`,
+    )
+  }
+  if (Math.abs(fraction.y - fractionBase.y) > 0.0002) {
+    failures.push(
+      `${fraction.label} 的纵向视差占比 ${(fraction.y * 100).toFixed(2)}% 与 ${fractionBase.label} 的 ` +
+        `${(fractionBase.y * 100).toFixed(2)}% 不一致：镜头位移没有按视口等比换算`,
+    )
+  }
 }
 
 /**

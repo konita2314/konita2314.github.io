@@ -6,7 +6,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from '@/composables/useI18n'
 import { useScrollLock } from '@/composables/useScrollLock'
 import { getSearchIndex, type SearchEntry } from '@/utils/blog'
-import { isMobileDevice, requestGyroPermission } from '@/utils/device'
+import { isMobileDevice, requestGyroAccess } from '@/utils/device'
 
 const settings = useSettingsStore()
 const { t } = useI18n()
@@ -55,7 +55,7 @@ async function toggleGyroscope(event: Event) {
     return
   }
   // 点击本身就是用户手势：iOS 的方向传感器授权必须在这里申请
-  const granted = await requestGyroPermission()
+  const granted = (await requestGyroAccess()) === 'granted'
   settings.setGyroscope(granted)
   input.checked = granted
 }
