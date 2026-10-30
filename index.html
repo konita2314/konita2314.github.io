@@ -3,8 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      // 在任何样式/脚本前同步应用主题，防止 FOUC。
-      // 注意：与 src/stores/settings.ts 的初始化逻辑保持一致（同一 key、同一值格式）。
       try {
         var root = document.documentElement
         var dm = localStorage.getItem('darkMode')

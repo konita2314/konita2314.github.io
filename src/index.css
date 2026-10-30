@@ -13,6 +13,55 @@
   --light: #FFFFFF;
   --gray: #94A3B8;
   --transition: all 0.3s ease;
+
+  /* ---------- 阅读页（博客正文）色板 ----------
+     深浅两套只换下面这些变量，正文 / 代码 / 表格 / 目录 / 玻璃面板一起跟着变。 */
+  --read-text: #374151;              /* 正文 */
+  --read-heading: #111827;           /* 标题 */
+  --read-muted: #4b5563;             /* 次要文字（日期、目录、引用） */
+  --read-border: rgba(15, 23, 42, 0.1);
+  --read-link: #2563eb;              /* 正文链接：比 --primary 深，白底上才够 4.5:1 */
+  --read-chip-bg: #eef1f5;           /* 行内代码 */
+  --read-chip-text: #1e293b;
+  --read-code-bg: #f7f8fa;           /* 代码块 */
+  --read-code-border: rgba(15, 23, 42, 0.08);
+  --read-quote-bg: rgba(96, 165, 250, 0.07);
+  --read-th-bg: rgba(15, 23, 42, 0.035);
+
+  /* 玻璃纸面板：浅色 = 半透明乳白 + 提饱和的磨砂 */
+  --paper-bg: rgba(255, 255, 255, 0.55);
+  --paper-border: rgba(148, 163, 184, 0.24);
+  --paper-sheen: rgba(255, 255, 255, 0.9);
+  --paper-shadow: 0 18px 44px rgba(15, 23, 42, 0.1);
+  --paper-blur: blur(18px) saturate(1.9);
+
+  /* 悬浮目录面板 */
+  --read-panel-bg: #ffffff;
+  --read-panel-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
+}
+
+/* 深色：不是把浅色调暗，而是换一套「烟灰玻璃」——中性炭灰，颜色全部让给背后的粒子 */
+html.dark-mode {
+  --read-text: #d4d4d8;
+  --read-heading: #fafafa;
+  --read-muted: #a1a1aa;
+  --read-border: rgba(255, 255, 255, 0.1);
+  --read-link: #79c0ff;
+  --read-chip-bg: rgba(255, 255, 255, 0.08);
+  --read-chip-text: #e4e4e7;
+  --read-code-bg: rgba(0, 0, 0, 0.35);
+  --read-code-border: rgba(255, 255, 255, 0.08);
+  --read-quote-bg: rgba(96, 165, 250, 0.1);
+  --read-th-bg: rgba(255, 255, 255, 0.05);
+
+  --paper-bg: rgba(15, 15, 17, 0.66);
+  --paper-border: rgba(255, 255, 255, 0.075);
+  --paper-sheen: rgba(255, 255, 255, 0.06);
+  --paper-shadow: 0 22px 56px rgba(0, 0, 0, 0.55);
+  --paper-blur: blur(22px) saturate(1.15);
+
+  --read-panel-bg: rgba(20, 20, 22, 0.92);
+  --read-panel-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
 }
 
 /* 滚动条槽位常驻：面板/抽屉打开锁滚动时滚动条原地消失，视口宽度恒定，
@@ -22,7 +71,9 @@ html {
 }
 
 body {
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  /* 前两个是 main.ts 里自托管字体声明的真实 family 名（带 Variable 后缀）；
+     紧随其后的静态名留作本地已装该字体时的兜底，最后才是系统字体栈 */
+  font-family: 'Inter Variable', 'Inter', 'Noto Sans SC Variable', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   background-color: var(--light);
   color: var(--dark);
   line-height: 1.6;
@@ -162,7 +213,7 @@ html.dark-mode .blog-card:hover {
 }
 
 html.dark-mode .blog-title {
-  color: #f0f0f0;
+  color: var(--read-heading);
 }
 
 html.dark-mode .footer {
@@ -215,14 +266,34 @@ html.dark-mode .section-title {
   color: #f0f0f0;
 }
 
-/* 暗色模式切换按钮 */
-.theme-toggle {
-  background: none;
+/* 顶栏的三个图标按钮（主题 / 抽屉 / 面板）：统一做成正方形 + 图标居中。
+   贴基线摆放的 inline SVG 会在盒子底部留下下伸部，原来量到的是 18×23，
+   图标中心比盒子中心高 2.5px —— 一旋转就绕盒子中心画小圈，看着像被甩出去。 */
+.theme-toggle,
+.sidebar-toggle,
+.right-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: none;
+  background: none;
   color: var(--dark);
-  font-size: 1.2rem;
+  line-height: 1;
   cursor: pointer;
+  /* 旋转中心 = 盒子中心 = 图标中心（正方形是这道等式的另一半） */
+  transform-origin: center;
   transition: var(--transition);
+}
+
+/* SVG 改成块级：不再按基线对齐，图标才真正落在盒子正中 */
+.theme-toggle > svg,
+.sidebar-toggle > svg,
+.right-sidebar-toggle > svg {
+  display: block;
+  flex: none;
 }
 
 html.dark-mode .theme-toggle {
@@ -284,23 +355,55 @@ html.dark-mode .theme-toggle {
   z-index: 1;
 }
 
-.nav-link::before {
+/* 导航项的框选底色：两层叠在一起，各管一段 --------------------------------
+   进场：::before 左边缘钉住，右边缘向右扫开（ease-out：先快后慢，收势轻柔）；
+   离场：::before 立即让位，::after 右边缘钉住、左边缘追上来（ease-in：起步轻、收尾快），
+        整体是「自左向右被吃掉」，最后在右侧收成一条线 —— 而不是原路缩回左边。
+   两层同色同位置，交接那一帧看不出换层；用 scaleX 而不是 width，走合成器不触发重排。 */
+.nav-link::before,
+.nav-link::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 100%;
+  inset: 0;
   background-color: rgba(96, 165, 250, 0.1);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: -1;
+  pointer-events: none;
 }
 
-.nav-link:hover::before {
-  width: 100%;
+/* 进场层：左边缘固定 */
+.nav-link::before {
+  transform: scaleX(0);
+  transform-origin: left center;
+  /* 离场交给 ::after 收尾，这一层立即消失，避免两层同时缩放 */
+  transition: none;
 }
 
-html.dark-mode .nav-link::before {
+/* 离场层：右边缘固定。静止时宽度为 0（不可见），
+   离场瞬间透明度过期为 0s 立刻显形，再从满宽收到右侧 */
+.nav-link::after {
+  transform: scaleX(0);
+  transform-origin: right center;
+  opacity: 1;
+  transition: transform 0.32s cubic-bezier(0.32, 0, 0.67, 0), opacity 0s;
+}
+
+/* 悬停 / 当前路由：进场层扫满 */
+.nav-link:hover::before,
+.nav-link.active::before {
+  transform: scaleX(1);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 悬停 / 当前路由期间：离场层满宽但透明（不叠色，只作为离场起点） */
+.nav-link:hover::after,
+.nav-link.active::after {
+  transform: scaleX(1);
+  opacity: 0;
+  transition: none;
+}
+
+html.dark-mode .nav-link::before,
+html.dark-mode .nav-link::after {
   background-color: rgba(96, 165, 250, 0.2);
 }
 
@@ -581,13 +684,24 @@ html.dark-mode .hero-content {
 }
 
 .blog-link {
-  color: var(--primary);
-  text-decoration: none;
-  font-weight: 500;
+  margin-top: 0.25rem;
   transition: var(--transition);
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* 颜色必须落在 <a> 上：UA 的 a:link / a:visited 会压过从容器继承的颜色，
+   否则卡片里这条「阅读更多」是浏览器默认的蓝/紫链接，深色卡片上几乎看不清。
+   用 --read-link（浅色下比 --primary 深）保证白底上的对比度。 */
+.blog-link a {
+  color: var(--read-link);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.blog-link a:visited {
+  color: var(--read-link);
 }
 
 .blog-link:hover {
@@ -840,32 +954,16 @@ html.dark-mode .sidebar .sidebar-nav a:hover {
   background: rgba(96, 165, 250, 0.2);
 }
 
+/* 图标按钮的外观（正方形、居中、过渡）见 .theme-toggle 那一组；这里只补各自的显隐与旋转角度 */
 .sidebar-toggle {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: var(--dark);
   display: none;
-}
-
-.right-sidebar-toggle {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: var(--dark);
-  transition: var(--transition);
 }
 
 .right-sidebar-toggle:hover {
   transform: rotate(15deg);
 }
 
-html.dark-mode .sidebar-toggle {
-  color: #f5f5f5;
-}
-
+html.dark-mode .sidebar-toggle,
 html.dark-mode .right-sidebar-toggle {
   color: #f5f5f5;
 }
@@ -1276,10 +1374,6 @@ html.dark-mode .right-sidebar .language-select:focus {
     width: 280px;
     padding: 1.5rem;
   }
-  
-  .right-sidebar-toggle {
-    display: inline-block;
-  }
 }
 
 @media (max-width: 480px) {
@@ -1352,7 +1446,7 @@ html.dark-mode .tool-content {
   font-weight: 700;
   margin: 1rem 0;
   color: var(--primary);
-  font-family: 'Noto Sans SC', 'Inter', 'Arial', 'Helvetica', sans-serif;
+  font-family: 'Noto Sans SC Variable', 'Noto Sans SC', 'Inter Variable', 'Inter', 'Arial', 'Helvetica', sans-serif;
   letter-spacing: 2px;
 }
 
@@ -1477,9 +1571,13 @@ html.dark-mode .clock-fullscreen .time {
   color: white;
 }
 
-/* Markdown内容样式 */
+/* ---------- Markdown 正文（全站唯一一份） ----------
+   颜色全部走 :root / html.dark-mode 里的 --read-* 变量：
+   正文、标题、代码、表格、引用、目录只认这一组，改色系不用再翻两处。 */
 .markdown-content {
-  line-height: 1.7;
+  line-height: 1.75;
+  color: var(--read-text);
+  overflow-wrap: break-word;
 }
 
 .markdown-content h1,
@@ -1490,49 +1588,21 @@ html.dark-mode .clock-fullscreen .time {
 .markdown-content h6 {
   margin-top: 2rem;
   margin-bottom: 1rem;
-  color: var(--dark);
+  line-height: 1.35;
+  color: var(--read-heading);
+  /* 目录跳转时别被固定导航栏盖住 */
+  scroll-margin-top: 96px;
 }
 
-html.dark-mode .markdown-content h1,
-html.dark-mode .markdown-content h2,
-html.dark-mode .markdown-content h3,
-html.dark-mode .markdown-content h4,
-html.dark-mode .markdown-content h5,
-html.dark-mode .markdown-content h6 {
-  color: #f5f5f5;
-}
+.markdown-content h2 { font-size: 1.5rem; }
+.markdown-content h3 { font-size: 1.25rem; }
 
 .markdown-content p {
   margin-bottom: 1rem;
 }
 
-.markdown-content code {
-  background: #f1f5f9;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0;
-  font-family: 'Maple Mono CN', 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.85rem;
-}
-
-html.dark-mode .markdown-content code {
-  background: #374151;
-}
-
-.markdown-content pre {
-  background: #f1f5f9;
-  padding: 1rem;
-  border-radius: 0;
-  overflow-x: auto;
-  margin: 1rem 0;
-}
-
-html.dark-mode .markdown-content pre {
-  background: #374151;
-}
-
-.markdown-content pre code {
-  background: transparent;
-  padding: 0;
+.markdown-content strong {
+  color: var(--read-heading);
 }
 
 .markdown-content ul,
@@ -1545,14 +1615,173 @@ html.dark-mode .markdown-content pre {
   margin-bottom: 0.5rem;
 }
 
-.markdown-content a {
+.markdown-content li::marker {
   color: var(--primary);
+}
+
+.markdown-content a {
+  color: var(--read-link);
   text-decoration: none;
+  border-bottom: 1px solid transparent;
   transition: var(--transition);
 }
 
 .markdown-content a:hover {
-  text-decoration: underline;
+  border-bottom-color: currentColor;
+}
+
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid var(--read-border);
+  margin: 2.5rem 0;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+/* 引用块 */
+.markdown-content blockquote {
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 10px 10px 0;
+  background: var(--read-quote-bg);
+  color: var(--read-muted);
+}
+
+/* 行内代码：中性小块，不抢镜 */
+.markdown-content code {
+  background: var(--read-chip-bg);
+  color: var(--read-chip-text);
+  padding: 0.14rem 0.42rem;
+  border-radius: 6px;
+  font-family: 'Maple Mono CN', 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875em;
+}
+
+/* 代码块 */
+.markdown-content pre {
+  background: var(--read-code-bg);
+  border: 1px solid var(--read-code-border);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin: 1.25rem 0;
+  overflow-x: auto;
+}
+
+.markdown-content pre code {
+  background: none;
+  color: var(--read-text);
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+/* 表格（markdown-it 的 default preset 打开了 table） */
+.markdown-content table {
+  width: 100%;
+  margin: 1.25rem 0;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--read-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--read-th-bg);
+  color: var(--read-heading);
+}
+
+/* 代码高亮：main.ts 引的是 highlight.js 的 github 浅色主题，
+   暗色下那套 token 色（深蓝字符串 / 深灰注释）压在深底上几乎看不见，
+   这里补一套 github-dark 的等价配色（只覆盖常用 token） */
+html.dark-mode .markdown-content .hljs-doctag,
+html.dark-mode .markdown-content .hljs-keyword,
+html.dark-mode .markdown-content .hljs-meta .hljs-keyword,
+html.dark-mode .markdown-content .hljs-template-tag,
+html.dark-mode .markdown-content .hljs-template-variable,
+html.dark-mode .markdown-content .hljs-type,
+html.dark-mode .markdown-content .hljs-variable.language_ {
+  color: #ff7b72;
+}
+
+html.dark-mode .markdown-content .hljs-title,
+html.dark-mode .markdown-content .hljs-title.class_,
+html.dark-mode .markdown-content .hljs-title.function_ {
+  color: #d2a8ff;
+}
+
+html.dark-mode .markdown-content .hljs-attr,
+html.dark-mode .markdown-content .hljs-attribute,
+html.dark-mode .markdown-content .hljs-literal,
+html.dark-mode .markdown-content .hljs-meta,
+html.dark-mode .markdown-content .hljs-number,
+html.dark-mode .markdown-content .hljs-operator,
+html.dark-mode .markdown-content .hljs-selector-attr,
+html.dark-mode .markdown-content .hljs-selector-class,
+html.dark-mode .markdown-content .hljs-selector-id,
+html.dark-mode .markdown-content .hljs-variable {
+  color: #79c0ff;
+}
+
+html.dark-mode .markdown-content .hljs-meta .hljs-string,
+html.dark-mode .markdown-content .hljs-regexp,
+html.dark-mode .markdown-content .hljs-string {
+  color: #a5d6ff;
+}
+
+html.dark-mode .markdown-content .hljs-built_in,
+html.dark-mode .markdown-content .hljs-symbol {
+  color: #ffa657;
+}
+
+html.dark-mode .markdown-content .hljs-code,
+html.dark-mode .markdown-content .hljs-comment,
+html.dark-mode .markdown-content .hljs-formula {
+  color: #8b949e;
+}
+
+html.dark-mode .markdown-content .hljs-name,
+html.dark-mode .markdown-content .hljs-quote,
+html.dark-mode .markdown-content .hljs-selector-pseudo,
+html.dark-mode .markdown-content .hljs-selector-tag {
+  color: #7ee787;
+}
+
+html.dark-mode .markdown-content .hljs-bullet {
+  color: #f2cc60;
+}
+
+html.dark-mode .markdown-content .hljs-section {
+  color: #1f6feb;
+  font-weight: 700;
+}
+
+html.dark-mode .markdown-content .hljs-emphasis {
+  font-style: italic;
+}
+
+html.dark-mode .markdown-content .hljs-strong {
+  font-weight: 700;
+}
+
+html.dark-mode .markdown-content .hljs-addition {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+
+html.dark-mode .markdown-content .hljs-deletion {
+  color: #ffdcd7;
+  background-color: #67060c;
 }
 
 /* 舞萌查分器页面样式 */
@@ -1944,51 +2173,117 @@ html.dark-mode .chart-grid::-webkit-scrollbar-thumb:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-/* 悬浮目录样式 */
+/* 悬浮目录：按钮固定在右下角，面板朝按钮上方展开 */
 .toc-container {
   position: fixed;
   right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: 20px;
+  top: auto;
+  transform: none;
   z-index: 1000;
 }
 
+/* 目录按钮：正方形 + 图标居中（和顶栏那几个图标按钮同一套规则，
+   否则图标按基线摆放会比盒子中心高一截，看着没对齐） */
 .toc-button {
-  background: #60A5FA;
-  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
   border: none;
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  font-size: 20px;
+  background: #60a5fa;
+  color: #ffffff;
+  line-height: 1;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toc-button > svg {
+  display: block;
+  flex: none;
 }
 
 .toc-button:hover {
-  background: #3B82F6;
+  background: #3b82f6;
   transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 26px rgba(37, 99, 235, 0.45);
 }
 
+.toc-button:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.toc-button:focus-visible {
+  outline: 2px solid #bfdbfe;
+  outline-offset: 3px;
+}
+
+/* 面板：贴在按钮上方、右缘对齐。
+   高度上限由组件按「按钮上方的实际可用空间」写进 --toc-max-h：
+   内容放得下就自然收起、没有滚动条，放不下才封顶滚动。 */
 .toc-panel {
   position: absolute;
-  right: 60px;
-  top: 0;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  padding: 15px;
-  min-width: 250px;
-  max-height: 400px;
+  right: 0;
+  bottom: calc(100% + 12px);
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 40px));
+  max-height: var(--toc-max-h, 60vh);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  background: var(--read-panel-bg);
+  border: 1px solid var(--read-border);
+  border-radius: 14px;
+  box-shadow: var(--read-panel-shadow);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--read-text);
+  scrollbar-width: thin;
+  scrollbar-color: var(--read-border) transparent;
+  animation: toc-pop 0.16s ease-out both;
+}
+
+/* 需要滚动时给滚动条留固定槽位：滚动条出现/消失不会让文字左右跳 */
+.toc-panel.is-scrollable {
+  scrollbar-gutter: stable;
+}
+
+.toc-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.toc-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.toc-panel::-webkit-scrollbar-thumb {
+  background: var(--read-border);
+  border-radius: 999px;
+}
+
+.toc-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--read-muted);
+}
+
+@keyframes toc-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .toc-panel h4 {
   margin-top: 0;
   margin-bottom: 10px;
-  color: #333;
+  color: var(--read-heading);
   font-size: 16px;
 }
 
@@ -2001,12 +2296,14 @@ html.dark-mode .chart-grid::-webkit-scrollbar-thumb:hover {
 .toc-item {
   padding: 8px 10px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.2s ease;
+  border-radius: 6px;
+  color: var(--read-text);
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .toc-item:hover {
-  background: #f0f0f0;
+  background: var(--read-th-bg);
+  color: var(--read-heading);
 }
 
 .toc-item.level-2 {
@@ -2017,7 +2314,7 @@ html.dark-mode .chart-grid::-webkit-scrollbar-thumb:hover {
 .toc-item.level-3 {
   padding-left: 30px;
   font-size: 13px;
-  color: #666;
+  color: var(--read-muted);
 }
 
 .toc-item.level-4,
@@ -2025,89 +2322,105 @@ html.dark-mode .chart-grid::-webkit-scrollbar-thumb:hover {
 .toc-item.level-6 {
   padding-left: 40px;
   font-size: 12px;
-  color: #999;
+  color: var(--read-muted);
 }
 
-/* 博客详情页样式 */
-.blog-title {
-  font-size: 2.5rem;
+/* ---------- 博客详情页 ---------- */
+.blog-post-page {
+  padding: 1.5rem 0 3.5rem;
+}
+
+/* 正文栏：一行别拉满整屏（超过 ~75 字符眼睛要来回跳行）。
+   玻璃面板深浅色都用同一套结构：半透明底 + 描边 + 顶部内高光 + 磨砂模糊，
+   只有色值来自 --paper-* 变量（浅色是乳白磨砂，深色是烟灰玻璃）。 */
+.blog-post-page .blog-content {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.25rem 2.5rem 2.5rem;
+  border-radius: 18px;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-border);
+  box-shadow: var(--paper-shadow), inset 0 1px 0 var(--paper-sheen);
+  backdrop-filter: var(--paper-blur);
+  -webkit-backdrop-filter: var(--paper-blur);
+}
+
+/* 只作用于详情页：列表卡片的标题沿用卡片自己的字号（原来是这里把它顶成了 2.5rem） */
+.blog-post-page .blog-title {
+  font-size: 2.4rem;
   font-weight: 700;
-  color: #111827;
-  margin-bottom: 1.5rem;
+  color: var(--read-heading);
+  margin-bottom: 1.25rem;
   line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* 手机上 46rem 的栏宽会被内边距吃掉太多正文，收一圈 */
+@media (max-width: 640px) {
+  .blog-post-page {
+    padding: 1rem 0 2.5rem;
+  }
+
+  .blog-post-page .blog-content {
+    padding: 1.5rem 1.25rem 1.75rem;
+    border-radius: 14px;
+  }
+
+  .blog-post-page .blog-title {
+    font-size: 1.9rem;
+  }
 }
 
 .blog-section-title {
   font-size: 1.75rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--read-heading);
   margin-top: 2rem;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--read-border);
 }
 
-.markdown-content {
-  line-height: 1.6;
-  color: #374151;
+/* 文章元信息其实是一块 <blockquote>：在通用引用样式之上单独压掉背景与斜体 */
+.markdown-content .blog-meta {
+  display: block;
+  margin: 0 0 2rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--read-th-bg);
+  border: 1px solid var(--read-border);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 10px 10px 0;
+  color: var(--read-muted);
+  font-style: normal;
+  font-size: 0.9rem;
 }
 
-.markdown-content p {
-  margin-bottom: 1rem;
-}
-
-.markdown-content code {
-  background: #f3f4f6;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.9em;
-}
-
-.markdown-content pre {
-  background: #f3f4f6;
-  padding: 1rem;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin-bottom: 1rem;
-}
-
-.markdown-content pre code {
-  background: none;
-  padding: 0;
-}
-
-.markdown-content blockquote {
-  border-left: 4px solid #60A5FA;
-  padding-left: 1rem;
-  margin: 1rem 0;
-  color: #6b7280;
-  font-style: italic;
-}
-
-.blog-meta {
-  margin-bottom: 2rem;
-  background: #f9fafb;
-  padding: 1rem;
-  border-radius: 8px;
+html.dark-mode .markdown-content .blog-meta {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  border-left-color: var(--primary);
 }
 
 .blog-meta p {
-  margin: 0.5rem 0;
+  margin: 0.35rem 0;
 }
 
 .blog-warning {
   color: #dc2626;
   font-weight: 500;
-  margin-top: 1rem !important;
+  margin-top: 0.75rem !important;
 }
 
-/* 博客空状态/错误提示 */
+html.dark-mode .blog-warning {
+  color: #f87171;
+}
+
+/* 博客空状态 / 错误提示 */
 .error,
 .no-posts {
   text-align: center;
   padding: 40px 0;
-  color: #666;
+  color: var(--read-muted);
   font-size: 18px;
 }
 
@@ -2251,7 +2564,7 @@ html.dark-mode .chart-item:nth-child(3) .chart-rank {
   width: 100%;
   display: block;
   line-height: 1.3;
-  font-family: 'Noto Sans SC', 'Inter', sans-serif;
+  font-family: 'Noto Sans SC Variable', 'Noto Sans SC', 'Inter Variable', 'Inter', sans-serif;
 }
 
 html.dark-mode .chart-title {
@@ -2467,16 +2780,15 @@ html.dark-mode .navbar.scrolled {
   box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
 }
 
-/* 导航激活状态（RouterLink active 高亮） */
+/* 导航激活状态（RouterLink active 高亮）；框选底色由上面的 ::before / ::after 负责 */
 .nav-link.active {
   color: var(--primary);
-}
-.nav-link.active::before {
-  width: 100%;
 }
 
 /* 低性能模式：定向禁用动画/过渡（弱设备场景，不用 * 通配；新增会动元素时同步补此清单） */
 html.low-performance .navbar, html.low-performance .tool-card,
+html.low-performance .nav-link::before, html.low-performance .nav-link::after,
+html.low-performance .toc-button, html.low-performance .toc-panel,
 html.low-performance .blog-card, html.low-performance .btn,
 html.low-performance .v-enter-active, html.low-performance .v-leave-active,
 html.low-performance .panel-enter-active, html.low-performance .panel-leave-active,
@@ -2677,15 +2989,25 @@ html.dark-mode .about-desc {
   max-width: 800px;
   text-align: center;
   padding: 2rem;
-  background: rgba(255, 255, 255, 0.8);
+  /* 浅色底下毛玻璃看不出效果，根源不是「不够模糊」，而是没有东西可透：
+     页面是纯白、粒子本身也只有 10% 透明度，再盖一层 80% 白 ≈ 一块白板。
+     所以三件事一起做：
+       1) 底色降到 52%，让背景真的透上来；
+       2) backdrop-filter 加 saturate()，把透上来的淡彩提浓 —— 只降透明度只会得到灰雾；
+       3) 一圈细边 + 顶部内高光，把「玻璃厚度」画出来（纯白背景上没有轮廓就只剩色块）。
+     正文对比度仍然 ≈ 9.6:1（WCAG AA 只要 4.5:1），可读性不受影响。 */
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 12px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(18px) saturate(2);
+  -webkit-backdrop-filter: blur(18px) saturate(2);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
   animation: fadeInUp 0.6s ease-out 0.2s both;
 }
 html.dark-mode .about-card {
+  /* 深色底下背景本身够亮，80% 不透明已经是玻璃感，保持原样（只把细边隐去，几何不变） */
   background: rgba(35, 35, 35, 0.8);
+  border-color: transparent;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 .about-card p {
