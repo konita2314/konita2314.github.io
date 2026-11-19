@@ -389,7 +389,9 @@ function measureScrollJourney(): ScrollJourney {
 /** 滚动视差：一次满幅滚动时各层在屏幕上移动多少 */
 function measureScrollParallax(scrollY: number): LayerParallax[] {
   const bounds: Bounds = { width: 1440, height: 900 }
-  const field = createField(bounds)
+  // 极长环带 + 锚点整体挪到中段：测量期间不会有粒子跨接缝跳动
+  const field = createField(bounds, 1e9, 'light')
+  for (const particle of field) particle.anchorY += 5e8
   const input = {
     time: 0,
     dt: 0,

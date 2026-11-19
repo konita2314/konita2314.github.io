@@ -141,12 +141,13 @@ const COLOR_POOL_DARK: readonly Rgb[] = [
 ]
 
 /**
- * 两种主题：浅色底正常叠加（半透明淡彩）；
- * 深色底改用 screen 混合 + 更高透明度 —— 重叠处越叠越亮，像彩色玻璃，而不是糊上一层灰。
+ * 两种主题用同一个透明度：浅色模式和深色模式的粒子应该一样「若有若无」。
+ * 差别只在合成方式 —— 深色底用 screen，重叠处会越叠越亮（浅色底用正常叠加），
+ * 以及色相各有一版更适合本主题的亮度。
  * 两条 colors 数组索引一一对应，换主题时只改「亮度版本」，色相不变。
  */
 export const PARTICLE_PALETTES: Record<ParticleTheme, ParticlePalette> = {
-  dark: { alpha: 0.34, colors: COLOR_POOL_DARK, blend: 'screen' },
+  dark: { alpha: 0.1, colors: COLOR_POOL_DARK, blend: 'screen' },
   light: { alpha: 0.1, colors: COLOR_POOL, blend: 'source-over' },
 }
 

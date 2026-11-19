@@ -112,6 +112,11 @@ export const useSettingsStore = defineStore('settings', () => {
     writeStorage(VISITS_KEY, JSON.stringify(recentVisits.value))
   }
 
+  function clearRecentVisits() {
+    recentVisits.value = []
+    writeStorage(VISITS_KEY, null)
+  }
+
   function markPerformancePopupShown() {
     writeStorage(POPUP_KEY, 'true')
   }
@@ -143,6 +148,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setGyroscope,
     setLocale,
     recordVisit,
+    clearRecentVisits,
     markPerformancePopupShown,
   }
 })

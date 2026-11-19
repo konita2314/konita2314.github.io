@@ -14,6 +14,20 @@
   --gray: #94A3B8;
   --transition: all 0.3s ease;
 
+  /* ---------- 导航贴纸 ----------
+     导航项背后一张斜纸：悬停只显影（角度不变），成为当前页再拧 10°。
+     设计稿与调参面板：design/nav-sticker-lab.html */
+  --st-size: 5.4em;              /* 纸的边长 ≈ 条高的 1.2 倍 */
+  --st-radius: 2px;
+  --st-in: 420ms;
+  --st-out: 220ms;
+  --st-intent: 60ms;             /* 悬停意图延迟：过滤快速划过 */
+  --st-ease-in: cubic-bezier(0.34, 1.42, 0.64, 1);
+  --st-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --st-color-hover: #d7effa;
+  --st-color-active: #78caec;
+  --st-brand: #29abe2;           /* 品牌纸比当前页更深，三级层次不打架 */
+
   /* ---------- 阅读页（博客正文）色板 ----------
      深浅两套只换下面这些变量，正文 / 代码 / 表格 / 目录 / 玻璃面板一起跟着变。 */
   --read-text: #374151;              /* 正文 */
@@ -42,6 +56,10 @@
 
 /* 深色：不是把浅色调暗，而是换一套「烟灰玻璃」——中性炭灰，颜色全部让给背后的粒子 */
 html.dark-mode {
+  /* 深色底上不能再用实色纸：浅字会压在亮蓝上，改成半透明让底透上来 */
+  --st-color-hover: rgba(125, 211, 252, 0.24);
+  --st-color-active: rgba(125, 211, 252, 0.46);
+  --st-brand: #2489b5;
   --read-text: #d4d4d8;
   --read-heading: #fafafa;
   --read-muted: #a1a1aa;
@@ -173,9 +191,8 @@ html.dark-mode .nav-link {
   color: #e0e0e0;
 }
 
-html.dark-mode .nav-link:hover {
-  color: var(--primary);
-}
+/* 悬停不再改文字颜色：状态由贴纸承载。深色下原来的 --primary 压在浅蓝纸上只有 1.5:1，
+   而且只有深色模式会变色，和浅色模式不一致 */
 
 html.dark-mode .tools {
   background: #232323;
@@ -272,6 +289,8 @@ html.dark-mode .section-title {
 .theme-toggle,
 .sidebar-toggle,
 .right-sidebar-toggle {
+  position: relative;
+  z-index: 1;                    /* 贴纸压在图标背后 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -283,50 +302,116 @@ html.dark-mode .section-title {
   color: var(--dark);
   line-height: 1;
   cursor: pointer;
-  /* 旋转中心 = 盒子中心 = 图标中心（正方形是这道等式的另一半） */
-  transform-origin: center;
-  transition: var(--transition);
+  transition: color 0.3s ease;
 }
 
-/* SVG 改成块级：不再按基线对齐，图标才真正落在盒子正中 */
+/* 图标纸：比导航项小一号（42 / 86 / 92），同一套骨架，只是缩了尺 */
+.theme-toggle::before,
+.sidebar-toggle::before,
+.right-sidebar-toggle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 42px;
+  aspect-ratio: 1;
+  border-radius: var(--st-radius);
+  background: var(--st-color-hover);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-6deg) scale(0.86);
+  transition: opacity 0.14s ease-out, transform 0.34s var(--st-ease-in), background-color 0.3s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.theme-toggle:is(:hover, :focus-visible)::before,
+.sidebar-toggle:is(:hover, :focus-visible)::before,
+.right-sidebar-toggle:is(:hover, :focus-visible)::before {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(-6deg) scale(1);
+}
+
+/* SVG 改成块级：不再按基线对齐，图标才真正落在盒子正中；
+   旋转也从按钮挪到图标上，否则纸会跟着图标一起转 */
 .theme-toggle > svg,
 .sidebar-toggle > svg,
 .right-sidebar-toggle > svg {
   display: block;
   flex: none;
+  transition: transform 0.3s ease;
 }
 
 html.dark-mode .theme-toggle {
   color: #f5f5f5;
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover > svg {
   transform: rotate(180deg);
 }
 
-.navbar-container {
+/* 选择器带上 .navbar：1200px 以上还有一条 .container{max-width:1400px} 的媒体查询，
+   单靠 .navbar-container 的源码顺序压不住它 */
+.navbar .navbar-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* 头部通栏：logo 贴屏幕左边，品牌纸才会被屏幕裁到；
+     正文仍然是 1200 容器，不受影响 */
+  max-width: none;
+  padding: 0 22px;
 }
 
 .logo {
+  --logo-left: -70px;            /* 纸的左边距（负值 = 被屏幕裁掉） */
+  --logo-size: 92px;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  padding-left: 36px;            /* 给左边那张纸让位 */
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--primary);
   text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
+/* 品牌纸：比导航项的纸更大更深，被屏幕左边裁掉一截；
+   指针靠近时朝光标微微倾侧（见 usePointerLean） */
 .logo::before {
   content: '';
-  width: 24px;
-  height: 24px;
-  background: var(--primary);
-  display: inline-block;
-  animation: pulse 2s infinite;
+  position: absolute;
+  left: var(--logo-left);
+  top: 50%;
+  margin-top: calc(var(--logo-size) / -2);   /* 居中用外边距：构建会丢掉 translate 属性 */
+  width: var(--logo-size);
+  aspect-ratio: 1;
+  transform: translate(var(--tx, 0px), var(--ty, 0px)) rotate(calc(-8deg + var(--tilt, 0deg)));
+  border-radius: var(--st-radius);
+  background: var(--st-brand);
+  /* 投影写死、不跟指针走：一旦 box-shadow 里用了变量，每帧都要重绘模糊 */
+  box-shadow: 0 10px 26px rgba(3, 54, 78, 0.16);
+  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.3s ease;
+  will-change: transform;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.logo.is-tracking::before {
+  /* 跟手时不插值 transform，但换肤的颜色仍然要平滑 */
+  transition: background-color 0.3s ease;
+}
+
+/* 透明命中区：纸在链接盒子外面，补一块让它可点（伪元素命中即算链接本身） */
+.logo::after {
+  content: '';
+  position: absolute;
+  left: var(--logo-left);
+  top: 50%;
+  margin-top: calc(var(--logo-size) / -2);
+  width: var(--logo-size);
+  height: var(--logo-size);
+  border-radius: var(--st-radius);
+  pointer-events: auto;
 }
 
 @keyframes pulse {
@@ -348,63 +433,59 @@ html.dark-mode .theme-toggle {
   text-decoration: none;
   color: var(--dark);
   font-weight: 500;
-  transition: var(--transition);
+  transition: color 0.3s ease;
   padding: 6px 12px;
   display: inline-block;
   position: relative;
-  z-index: 1;
+  z-index: 1;                    /* 建立层叠上下文：纸的 -1 只压在自己背后 */
 }
 
-/* 导航项的框选底色：两层叠在一起，各管一段 --------------------------------
-   进场：::before 左边缘钉住，右边缘向右扫开（ease-out：先快后慢，收势轻柔）；
-   离场：::before 立即让位，::after 右边缘钉住、左边缘追上来（ease-in：起步轻、收尾快），
-        整体是「自左向右被吃掉」，最后在右侧收成一条线 —— 而不是原路缩回左边。
-   两层同色同位置，交接那一帧看不出换层；用 scaleX 而不是 width，走合成器不触发重排。 */
-.nav-link::before,
-.nav-link::after {
+/* 导航贴纸 ----------------------------------------------------------------
+   一张 86px 的正方纸，比 72px 的导航条更高：上沿被屏幕顶边裁掉，下沿压在内容上。
+   悬停只显影（-5° 是它的常态），成为当前页才多拧 10°。
+   进/退场分两条通道：透明先到、旋转后到；退场整体更快，快速划过不留残影。 */
+.nav-link::before {
   content: '';
   position: absolute;
-  inset: 0;
-  background-color: rgba(96, 165, 250, 0.1);
-  z-index: -1;
-  pointer-events: none;
-}
-
-/* 进场层：左边缘固定 */
-.nav-link::before {
-  transform: scaleX(0);
-  transform-origin: left center;
-  /* 离场交给 ::after 收尾，这一层立即消失，避免两层同时缩放 */
-  transition: none;
-}
-
-/* 离场层：右边缘固定。静止时宽度为 0（不可见），
-   离场瞬间透明度过期为 0s 立刻显形，再从满宽收到右侧 */
-.nav-link::after {
-  transform: scaleX(0);
-  transform-origin: right center;
-  opacity: 1;
-  transition: transform 0.32s cubic-bezier(0.32, 0, 0.67, 0), opacity 0s;
-}
-
-/* 悬停 / 当前路由：进场层扫满 */
-.nav-link:hover::before,
-.nav-link.active::before {
-  transform: scaleX(1);
-  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-/* 悬停 / 当前路由期间：离场层满宽但透明（不叠色，只作为离场起点） */
-.nav-link:hover::after,
-.nav-link.active::after {
-  transform: scaleX(1);
+  left: 50%;
+  top: 50%;
+  width: max(var(--st-size), calc(100% - 8px));
+  aspect-ratio: 1;
+  border-radius: var(--st-radius);
+  background: var(--st-color-hover);
   opacity: 0;
-  transition: none;
+  /* 居中 + 旋转 + 缩放全写进 transform：构建时会把独立的 translate 属性丢掉 */
+  transform: translate(-50%, -50%) rotate(-5deg) scale(0.92);
+  /* 退场节奏写在「关」的这一档 */
+  transition:
+    opacity calc(var(--st-out) * 0.55) ease-in,
+    transform var(--st-out) var(--st-ease-out),
+    background-color 0.3s ease;   /* 深浅色切换时纸的颜色跟着字一起走，不跳变 */
+  will-change: opacity, transform;
+  pointer-events: none;
+  z-index: -1;
 }
 
-html.dark-mode .nav-link::before,
-html.dark-mode .nav-link::after {
-  background-color: rgba(96, 165, 250, 0.2);
+/* 悬停 / 键盘聚焦：只显影。意图延迟只加在「开」这一档，退场绝不等 */
+.nav-link:is(:hover, :focus-visible)::before {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(-5deg) scale(1);
+  transition:
+    opacity calc(var(--st-in) * 0.55) ease-out,
+    transform var(--st-in) var(--st-ease-in),
+    background-color 0.3s ease;
+  transition-delay: var(--st-intent), var(--st-intent);
+}
+
+/* 当前页：同一张纸，换个颜色、再拧 10° */
+.nav-link.active::before {
+  opacity: 1;
+  background: var(--st-color-active);
+  transform: translate(-50%, -50%) rotate(-15deg) scale(1);
+  transition:
+    opacity calc(var(--st-in) * 0.55) ease-out,
+    transform var(--st-in) var(--st-ease-in),
+    background-color 0.3s ease;
 }
 
 /* 英雄区域样式 */
@@ -720,6 +801,15 @@ html.dark-mode .hero-content {
   margin-bottom: 2rem;
 }
 
+/* 页脚品牌：不再复用 .logo —— 那一套现在带「品牌纸」和 36px 左留白，
+   放到页脚会变成一大块斜方块，文字也会被推偏；这里只要一行居中的字 */
+.footer-logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--primary);
+}
+
 .footer-links {
   display: flex;
   justify-content: center;
@@ -959,7 +1049,7 @@ html.dark-mode .sidebar .sidebar-nav a:hover {
   display: none;
 }
 
-.right-sidebar-toggle:hover {
+.right-sidebar-toggle:hover > svg {
   transform: rotate(15deg);
 }
 
@@ -2780,14 +2870,17 @@ html.dark-mode .navbar.scrolled {
   box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
 }
 
-/* 导航激活状态（RouterLink active 高亮）；框选底色由上面的 ::before / ::after 负责 */
-.nav-link.active {
-  color: var(--primary);
-}
+/* 导航激活状态：只由贴纸承载（颜色 + 角度），文字不单独变色 ——
+   浅色纸上 --primary 只有 1.5:1 的对比度；文字颜色与其它项共用同一套规则，
+   换肤时才能和导航条、纸的颜色一起平滑过渡 */
+
 
 /* 低性能模式：定向禁用动画/过渡（弱设备场景，不用 * 通配；新增会动元素时同步补此清单） */
 html.low-performance .navbar, html.low-performance .tool-card,
-html.low-performance .nav-link::before, html.low-performance .nav-link::after,
+html.low-performance .nav-link::before,
+html.low-performance .logo::before,
+html.low-performance .theme-toggle::before, html.low-performance .sidebar-toggle::before,
+html.low-performance .right-sidebar-toggle::before,
 html.low-performance .toc-button, html.low-performance .toc-panel,
 html.low-performance .blog-card, html.low-performance .btn,
 html.low-performance .v-enter-active, html.low-performance .v-leave-active,
@@ -2796,6 +2889,26 @@ html.low-performance .drawer-enter-active, html.low-performance .drawer-leave-ac
 html.low-performance .popup-enter-active, html.low-performance .popup-leave-active,
 html.low-performance .page-enter-active, html.low-performance .page-leave-active
 { animation: none !important; transition: none !important; }
+
+/* 减动效：不转，只留一次极短的显影；角度统一回落到 -5°，
+   避免"当前页"在 1ms 内突然拧 10° 的跳变 */
+@media (prefers-reduced-motion: reduce) {
+  .nav-link::before,
+  .nav-link:is(:hover, :focus-visible)::before,
+  .nav-link.active::before,
+  .theme-toggle::before,
+  .sidebar-toggle::before,
+  .right-sidebar-toggle::before {
+    transition-duration: 1ms !important;
+    transition-delay: 0s !important;
+  }
+  .nav-link.active::before {
+    transform: translate(-50%, -50%) rotate(-5deg) scale(1);
+  }
+  .logo::before {
+    transition: none;
+  }
+}
 
 /* 导航右侧动作组（logo 之外：nav-links + 三个按钮） */
 .nav-actions {
@@ -2872,29 +2985,7 @@ html.dark-mode .performance-popup p { color: #aaa; }
 @keyframes page-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .page-enter-active { animation: page-fade-in 0.2s ease-out; }
 
-/* 功能面板搜索结果 */
-.search-results {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 4px 0;
-  max-height: 240px;
-  overflow-y: auto;
-  background: #f9fafb;
-  border-radius: 2px;
-}
-html.dark-mode .search-results { background: #2d2d2d; }
-.search-results li {
-  padding: 8px 12px;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.search-results li:hover { background: rgba(96, 165, 250, 0.1); }
-.search-result-title { font-size: 0.9rem; }
-.search-result-path { font-size: 0.75rem; color: var(--gray); }
-.search-no-results { color: var(--gray); cursor: default !important; }
+/* 功能面板搜索结果样式已随面板组件迁移到 .right-panel 作用域 */
 
 /* 404 页 */
 .not-found-page {

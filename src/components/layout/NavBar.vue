@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import { Menu, Moon, Settings, Sun } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from '@/composables/useI18n'
+import { usePointerLean } from '@/composables/usePointerLean'
 
 const settings = useSettingsStore()
 const { t } = useI18n()
+
+// 品牌纸的指针牵引：靠近时微微倾侧，低性能模式下整体不跑
+const logoRef = useTemplateRef<HTMLAnchorElement>('logo')
+const { tracking } = usePointerLean(() => logoRef.value, {
+  disabled: () => settings.lowPerformance,
+})
 
 const scrolled = ref(false)
 let ticking = false
@@ -34,7 +41,15 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 <template>
   <nav :class="['navbar', { scrolled }]">
     <div class="container navbar-container">
-      <RouterLink to="/" class="logo">Konita</RouterLink>
+      <RouterLink v-slot="{ href, navigate }" to="/" custom>
+        <a
+          ref="logo"
+          :href="href"
+          class="logo"
+          :class="{ 'is-tracking': tracking }"
+          @click="navigate"
+        >Konita</a>
+      </RouterLink>
       <div class="nav-actions">
         <ul class="nav-links">
           <li>

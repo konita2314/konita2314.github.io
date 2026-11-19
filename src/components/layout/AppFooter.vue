@@ -8,7 +8,7 @@ const { t } = useI18n()
   <footer class="footer">
     <div class="container">
       <div class="footer-content">
-        <h3 class="logo">Konita</h3>
+        <h3 class="footer-logo">Konita</h3>
         <p>{{ t('footer.tagline') }}</p>
       </div>
       <ul class="footer-links">

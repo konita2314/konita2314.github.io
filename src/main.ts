@@ -9,6 +9,8 @@ import '@fontsource-variable/inter' // family: 'Inter Variable'（100 900 可变
 import '@fontsource-variable/noto-sans-sc' // family: 'Noto Sans SC Variable'（101 分片）
 import '@automann/maple-mono-cn/400.css' // family: 'Maple Mono CN'（239 分片）
 import './index.css'
+// 功能面板：放在 index.css 之后，覆盖仍保留在 index.css 里的旧面板样式
+import './components/layout/panel.css'
 // 代码高亮主题（原站同样从 highlight.js 导入）
 import 'highlight.js/styles/github.css'
 
